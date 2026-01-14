@@ -17,12 +17,15 @@
             <div class="brandDot"></div>
             <span class="brandName">CARD BATTLER</span>
           </div>
-          <span class="pill">v1</span>
+          <div class="heroTopRight">
+            <span class="pill" id="homeGoldTag">Gold: 0</span>
+            <button class="btn btnGhost" id="btnHomeShop">🛒 Shop</button>
+          </div>
         </div>
 
-        <h1 class="heroTitle">Pick a Card. <span class="glow">Dominate.</span></h1>
+        <h1 class="heroTitle">Pick a Card. <span class="glow">Survive.</span></h1>
         <p class="heroSub">
-          A fast, tactical card duel. Use skills wisely, manage cooldowns, and finish the enemy.
+          Endless enemies. Your HP and Shield carry over. Earn gold. Buy upcoming cards.
         </p>
 
         <div class="heroActions">
@@ -31,11 +34,33 @@
         </div>
 
         <div class="heroHints">
-          <div class="hint">💥 Attacks reduce HP</div>
-          <div class="hint">✨ Skills have cooldown</div>
-          <div class="hint">🎲 Enemy passive may trigger</div>
+          <div class="hint">🛡️ Shield absorbs damage first</div>
+          <div class="hint">🎁 Win = 1–20 Gold</div>
+          <div class="hint">🛒 Shop = future cards</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- SHOP -->
+  <div id="shop" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Shop</h2>
+            <span class="pill" id="shopGoldTag">Gold: 0</span>
+          </div>
+          <p class="muted">Buy upcoming cards to mark them as Owned. (Playable when added later.)</p>
+        </div>
+
+        <div class="topbarActions">
+          <button class="btn btnGhost" id="btnShopBackHome">🏠 Home</button>
+          <button class="btn btnGhost" id="btnShopToBattle">⚔️ Battle</button>
+        </div>
+      </div>
+
+      <div id="shopGrid" class="shopGrid"></div>
     </div>
   </div>
 
@@ -46,9 +71,9 @@
         <div>
           <div class="titleRow">
             <h2 class="pageTitle">Gallery</h2>
-            <span class="pill">View all cards</span>
+            <span class="pill">All Fighters</span>
           </div>
-          <p class="muted">Hover cards to preview stats and skills.</p>
+          <p class="muted">See full card stats + skills.</p>
         </div>
 
         <div class="topbarActions">
@@ -61,7 +86,7 @@
     </div>
   </div>
 
-  <!-- SETUP / PICK -->
+  <!-- SETUP -->
   <div id="setup" class="screen" style="display:none;">
     <div class="wrap">
       <div class="topbar">
@@ -70,7 +95,7 @@
             <h2 class="pageTitle">Choose Your Fighter</h2>
             <span class="pill">Tap a card to start</span>
           </div>
-          <p class="muted">Your choice matters. Skills can change the entire fight.</p>
+          <p class="muted">Your stats carry through the entire run.</p>
         </div>
 
         <div class="topbarActions">
@@ -92,15 +117,18 @@
         <div class="gameTopLeft">
           <div class="titleRow">
             <h2 class="pageTitle">Battle Arena</h2>
+            <span class="pill" id="stageTag">Stage: 1</span>
             <span class="pill" id="roundTag">Round: 1</span>
             <span class="pill" id="turnTag">Turn: Player</span>
             <span class="pill" id="enemyPassiveTag">Enemy Passive: 35%</span>
+            <span class="pill" id="goldTag">Gold: 0</span>
           </div>
-          <p class="muted">Use skills smartly. Watch status effects.</p>
+          <p class="muted">Shield absorbs damage first. Win = gold + next enemy.</p>
         </div>
 
         <div class="gameTopActions">
-          <button class="btn btnGhost" id="btnReset">🔁 New Match</button>
+          <button class="btn btnGhost" id="btnOpenShop">🛒 Shop</button>
+          <button class="btn btnGhost" id="btnReset">🔁 Restart Run</button>
           <button class="btn btnGhost" id="btnExitToHome">🏠 Home</button>
         </div>
       </div>
@@ -108,7 +136,7 @@
       <!-- MAIN GRID -->
       <div class="gameGrid">
 
-        <!-- ARENA (LEFT) -->
+        <!-- LEFT: ARENA -->
         <div class="arenaCard">
           <div class="fighters">
 
@@ -200,7 +228,7 @@
 
           </div>
 
-          <!-- ACTIONS BELOW -->
+          <!-- ACTIONS -->
           <div class="actionDock">
             <button class="btn btnPrimary big" id="btnAttack">⚔️ Attack</button>
             <button class="btn btnSoft big" id="btnSkill">✨ Use Skill</button>
@@ -208,7 +236,7 @@
           </div>
         </div>
 
-        <!-- RIGHT PANEL -->
+        <!-- RIGHT: TIP + LOG -->
         <div class="sidePanel">
 
           <div class="panelCard">
@@ -218,9 +246,9 @@
             </div>
 
             <ul class="tipList">
-              <li><b>Attack</b> deals damage based on ATK vs Shield.</li>
-              <li><b>Skill</b> can freeze, stun, heal, or boost.</li>
-              <li><b>Enemy Passive</b> may trigger at the start of each round.</li>
+              <li><b>Shield</b> absorbs damage first.</li>
+              <li><b>Win</b> gives random gold (1–20).</li>
+              <li><b>Shop</b> lets you buy upcoming cards.</li>
             </ul>
           </div>
 
@@ -239,7 +267,49 @@
     </div>
   </div>
 
+  <!-- SURVIVAL RESULT MODAL -->
+  <div id="resultModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox">
+      <div class="modalHeader">
+        <div class="modalTitle" id="resultTitle">Victory!</div>
+        <div class="modalPill" id="resultStage">Stage 1</div>
+      </div>
+
+      <div class="modalBody">
+        <p class="modalText" id="resultText">You defeated the enemy!</p>
+
+        <div class="modalStats">
+          <div class="modalStat">
+            <div class="modalStatLabel">Gold Reward</div>
+            <div class="modalStatValue" id="modalGoldReward">+0</div>
+          </div>
+          <div class="modalStat">
+            <div class="modalStatLabel">Total Gold</div>
+            <div class="modalStatValue" id="modalGoldTotal">0</div>
+          </div>
+        </div>
+
+        <div class="modalStats" style="margin-top:10px;">
+          <div class="modalStat">
+            <div class="modalStatLabel">Your HP</div>
+            <div class="modalStatValue" id="modalHP">0/0</div>
+          </div>
+          <div class="modalStat">
+            <div class="modalStatLabel">Your Shield</div>
+            <div class="modalStatValue" id="modalShield">0</div>
+          </div>
+        </div>
+
+        <div class="modalHint" id="modalHint">Next enemy incoming...</div>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn btnSoft big" id="btnNextEnemy">⚔️ Next Enemy</button>
+        <button class="btn btnGhost big" id="btnPlayAgain">🔁 Restart Run</button>
+      </div>
+    </div>
+  </div>
+
   <script src="game.js"></script>
 </body>
 </html>
- 
