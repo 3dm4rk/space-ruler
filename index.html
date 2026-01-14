@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Card Battler (Prototype)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Card Battler <span class="pill">Space Goofy Edition</span></h1>
+  </header>
+
+  <div class="wrap">
+    <!-- HOME / LANDING -->
+    <div id="home" class="panel hero">
+      <div class="heroArt" aria-hidden="true">
+        <div class="starfield"></div>
+        <div class="comet c1"></div>
+        <div class="comet c2"></div>
+        <div class="planet p1"></div>
+        <div class="planet p2"></div>
+        <div class="planet p3"></div>
+        <div class="ufo"></div>
+        <div class="sparkles"></div>
+      </div>
+      <div class="nebula"></div>
+      <div class="sparkles"></div>
+      <div class="planet p1"></div>
+      <div class="planet p2"></div>
+      <div class="grain"></div>
+      <div class="heroTop">
+        <div class="heroTitle">
+          <div class="heroKicker">Welcome, commander 👽</div>
+          <h2><span class="neon">Pick a card.</span> Start a battle. <span class="wobble">Laugh</span> in space.</h2>
+          <p class="muted">
+            Enemy has a passive ability that can trigger each round. Your skill is active — use it smart!
+          </p>
+          <div class="heroBtns">
+            <button class="btnPrimary" id="btnBattleNow">🚀 Battle Now</button>
+            <button id="btnOpenGallery">🃏 Cards Gallery</button>
+          </div>
+          <div class="heroMarquee" aria-hidden="true"><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span></div>
+          <div class="muted tiny">
+            Tip: Make sure your images are in the same folder as this site:
+            <code>3dm4rk.png</code>, <code>space-patrol.png</code>, <code>lucky-cat.png</code>
+          </div>
+        </div>
+
+        <div class="heroCard">
+          <div class="tag">Mode</div>
+          <div class="heroFacts">
+            <div class="fact"><span class="label">Battle</span><b>1v1</b></div>
+            <div class="fact"><span class="label">Enemy Passive</span><b>Chance / round</b></div>
+            <div class="fact"><span class="label">Your Skill</span><b>Active</b></div>
+          </div>
+          <div class="heroMarquee" aria-hidden="true"><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span></div>
+          <div class="muted tiny">
+            Press <b>Battle Now</b> to choose your card.
+          </div>
+        </div>
+      </div>
+
+      <div class="heroFooter">
+        <span class="tag">✨ Space + Goofy background</span>
+        <span class="tag">🧊 Freeze / 🚓 Stun / 🍀 Heal</span>
+      </div>
+    </div>
+
+    <!-- GALLERY -->
+    <div id="gallery" class="panel" style="display:none;">
+      <div class="row space">
+        <div>
+          <div class="muted">All Cards</div>
+          <div class="heroMarquee" aria-hidden="true"><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span></div>
+          <div class="muted tiny">See every card, stats, and abilities.</div>
+        </div>
+        <div class="row" style="gap:10px;">
+          <button id="btnGalleryToBattle" class="btnPrimary">🚀 Battle Now</button>
+          <button id="btnBackHomeFromGallery">← Back Home</button>
+        </div>
+      </div>
+      <div class="cards" id="galleryGrid"></div>
+    </div>
+
+    <!-- PICK / SETUP -->
+    <div id="setup" class="panel" style="display:none;">
+      <div class="row space">
+        <div>
+          <div class="muted">Step 1: Pick your card</div>
+          <div class="heroMarquee" aria-hidden="true"><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span><span>✨ Cosmic chaos • 🃏 Card powers • 🚀 Zero-gravity drama • 👽 Goofy aliens • </span></div>
+          <div class="muted tiny">Then battle starts immediately.</div>
+        </div>
+        <div class="row" style="gap:10px;">
+          <button id="btnSetupGallery">🃏 Gallery</button>
+          <button id="btnBackHomeFromSetup">← Back Home</button>
+        </div>
+      </div>
+
+      <div class="cards" id="pickGrid"></div>
+      <div class="muted tiny" style="margin-top:10px;">
+        Images expected in same folder: <code>3dm4rk.png</code>, <code>space-patrol.png</code>, <code>lucky-cat.png</code>
+      </div>
+    </div>
+
+    <!-- GAME -->
+    <div id="game" class="panel" style="display:none;">
+      <div class="row space">
+        <div class="topBtns">
+          <button class="btnPrimary" id="btnAttack">Attack</button>
+          <button id="btnSkill">Use Skill</button>
+          <button id="btnEnd">End Turn</button>
+        </div>
+        <div class="hud">
+          <span class="tag" id="turnTag">Turn: Player</span>
+          <span class="tag" id="roundTag">Round: 1</span>
+          <span class="tag" id="enemyPassiveTag">Enemy Passive: 35%</span>
+          <button id="btnReset">Restart</button>
+          <button id="btnExitToHome">Exit</button>
+        </div>
+      </div>
+
+      <div class="subgrid" style="margin-top:12px;">
+        <div class="arena">
+          <div class="fighter">
+            <div class="row space">
+              <strong id="pName">Player</strong>
+              <span class="tag" id="pSkillTag">Skill</span>
+            </div>
+            <img id="pImg" alt="player card" />
+            <div class="stats">
+              <div class="kv">
+                <div class="box"><div class="label">HP</div><b id="pHP"></b></div>
+                <div class="box"><div class="label">ATK / DEF</div><b><span id="pATK"></span> / <span id="pDEF"></span></b></div>
+              </div>
+              <div class="barWrap"><div class="bar hp" id="pHpBar"></div></div>
+              <div class="kv">
+                <div class="box"><div class="label">Shield</div><b id="pShield"></b></div>
+                <div class="box"><div class="label">Status</div><b id="pStatus">None</b></div>
+              </div>
+              <div class="barWrap"><div class="bar shield" id="pShieldBar"></div></div>
+            </div>
+          </div>
+
+          <div class="fighter">
+            <div class="row space">
+              <strong id="eName">Enemy</strong>
+              <span class="tag" id="eSkillTag">Skill</span>
+            </div>
+            <img id="eImg" alt="enemy card" />
+            <div class="stats">
+              <div class="kv">
+                <div class="box"><div class="label">HP</div><b id="eHP"></b></div>
+                <div class="box"><div class="label">ATK / DEF</div><b><span id="eATK"></span> / <span id="eDEF"></span></b></div>
+              </div>
+              <div class="barWrap"><div class="bar hp" id="eHpBar"></div></div>
+              <div class="kv">
+                <div class="box"><div class="label">Shield</div><b id="eShield"></b></div>
+                <div class="box"><div class="label">Status</div><b id="eStatus">None</b></div>
+              </div>
+              <div class="barWrap"><div class="bar shield" id="eShieldBar"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="line">
+            <h3>How damage works</h3>
+            <p>Damage = ATK + (0–1 RNG) − (Shield ÷ 2). Minimum 1. Getting hit reduces Shield by 1.</p>
+          </div>
+          <div class="line">
+            <h3>Statuses</h3>
+            <p><span class="tip"><span class="dot"></span>Frozen</span>: skip your next turn. <br>
+               <span class="tip"><span class="dot"></span>Stunned</span>: your next attack deals −2 damage (min 1).</p>
+          </div>
+          <div class="line">
+            <h3>Enemy passive</h3>
+            <p>At the start of each round, the enemy rolls a chance to trigger their passive ability automatically.</p>
+          </div>
+          <div class="line">
+            <h3>Tip</h3>
+            <p>Use your skill at the right moment. Ending your turn can be smart if you're frozen or waiting for cooldown.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="muted">Battle Log</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js" defer></script>
+</body>
+</html>
