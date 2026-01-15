@@ -565,6 +565,111 @@ astroWitch: {
     },
     legendaryCooldownMs: 5 * 60 * 1000
   }
+,
+
+  // =========================
+  // ✅ NEW CARDS (SHOP UPDATE)
+  // =========================
+
+  drNemesis: {
+    id: "drNemesis",
+    name: "Dr. Nemesis",
+    img: "cards/dr-nemesis.png",
+    atk: 10,
+    def: 5,
+    hp: 8,
+    skillName: "Scientific Calculation",
+    skillDesc: "Apply poison each round equal to 50% of enemy ATK, and apply a debuff each round: -5 ATK and -5 Armor. Effects stop when the enemy dies. (CD 3)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      // Poison: 50% of enemy ATK each round (until death)
+      foe.poisonRounds = Math.max(foe.poisonRounds || 0, 999);
+      foe.poisonPct = 0.50;       // 50% of ATK
+      foe.poisonFlat = 0;
+
+      // Debuff: every round, -5 ATK and -5 Armor (until death)
+      foe.debuffRounds = Math.max(foe.debuffRounds || 0, 999);
+      foe.debuffAtk = 5;
+      foe.debuffShield = 5;
+
+      me.cooldown = 3;
+      updateUI();
+      return { ok: true, msg: `${me.name} uses Scientific Calculation! Enemy is poisoned and weakened every round until they die.` };
+    }
+  },
+
+  hollyChild: {
+    id: "hollyChild",
+    name: "Holly Child",
+    img: "cards/holly-child.png",
+    atk: 15,
+    def: 10,
+    hp: 3,
+    skillName: "Enhancer",
+    skillDesc: "Deal 5 poison damage to the enemy every round until the enemy dies. (CD 2)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      foe.poisonRounds = Math.max(foe.poisonRounds || 0, 999);
+      foe.poisonPct = 0;
+      foe.poisonFlat = 5;
+
+      me.cooldown = 2;
+      updateUI();
+      return { ok: true, msg: `${me.name} uses Enhancer! Enemy will take 5 poison damage every round until they die.` };
+    }
+  },
+
+  ohtensahorse: {
+    id: "ohtensahorse",
+    name: "Otehnsahorse",
+    img: "cards/ohtensahorse.png",
+    atk: 5,
+    def: 4,
+    hp: 7,
+    skillName: "Sausage Beam",
+    skillDesc: "50% chance to blast 25 damage, otherwise 5 damage. (CD 2)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      const big = Math.random() < 0.5;
+      const dmg = big ? 25 : 5;
+
+      applyDamage(foe, dmg, { silent: true, source: "skill" });
+
+      me.cooldown = 2;
+      updateUI();
+      return { ok: true, msg: `${me.name} fires Sausage Beam! ${big ? "CRITICAL" : "Normal"} blast for ${dmg} damage.` };
+    }
+  },
+
+  spidigong: {
+    id: "spidigong",
+    name: "Spidigong",
+    img: "cards/spidigong.png",
+    atk: 25,
+    def: 5,
+    hp: 5,
+    skillName: "Tukhang",
+    skillDesc: "60% chance to stun the enemy for 2 rounds. While stunned, they cannot attack or use skills. (CD 3)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      const ok = Math.random() < 0.60;
+      if (ok) {
+        foe.stun2Rounds = Math.max(foe.stun2Rounds || 0, 2);
+        me.cooldown = 3;
+        updateUI();
+        return { ok: true, msg: `${me.name} uses Tukhang! Enemy is stunned and cannot act for 2 rounds.` };
+      }
+
+      me.cooldown = 3;
+      updateUI();
+      return { ok: true, msg: `${me.name} uses Tukhang... but it failed to stun.` };
+    }
+  }
+
 
 
 };
@@ -639,6 +744,41 @@ const SHOP_CARDS = [
     desc: "Damage: 6 • Armor: 4 • Life: 10 • Ability: Reality Lock (CD 3) — Deal 4 dmg, remove ALL enemy armor, apply Reboot Seal (2 turns): enemy cannot heal.",
     playable: true
   }
+,
+  // ✅ NEW SHOP ITEMS (Update)
+  {
+    id: "drNemesis",
+    name: "Dr. Nemesis",
+    img: "cards/dr-nemesis.png",
+    price: 15000,
+    desc: "Damage: 10 • Armor: 5 • Life: 8 • Ability: Scientific Calculation (CD 3) — Poison enemy each round for 50% of their ATK, and apply a debuff each round: -5 ATK and -5 Armor (until enemy dies).",
+    playable: true
+  },
+  {
+    id: "hollyChild",
+    name: "Holly Child",
+    img: "cards/holly-child.png",
+    price: 3000,
+    desc: "Damage: 15 • Armor: 10 • Life: 3 • Ability: Enhancer (CD 2) — Deal 5 poison damage to enemy every round (until enemy dies).",
+    playable: true
+  },
+  {
+    id: "ohtensahorse",
+    name: "Otehnsahorse",
+    img: "cards/ohtensahorse.png",
+    price: 85000,
+    desc: "Damage: 5 • Armor: 4 • Life: 7 • Ability: Sausage Beam (CD 2) — 50% chance to blast 25 damage, otherwise 5 damage.",
+    playable: true
+  },
+  {
+    id: "spidigong",
+    name: "Spidigong",
+    img: "cards/spidigong.png",
+    price: 25000,
+    desc: "Damage: 25 • Armor: 5 • Life: 5 • Ability: Tukhang (CD 3) — 60% chance to stun enemy for 2 rounds (enemy cannot attack or use skills).",
+    playable: true
+  }
+
 ];
 
 // =========================
@@ -817,6 +957,15 @@ function cloneCard(card) {
     noArmorGain: 0,
     rebootSeal: 0, // ✅ NEW
     silenced: 0,
+    // ✅ NEW: Poison / Debuff / Strong Stun
+    poisonRounds: 0,
+    poisonPct: 0,
+    poisonFlat: 0,
+    debuffRounds: 0,
+    debuffAtk: 0,
+    debuffShield: 0,
+    stun2Rounds: 0,
+
     skillReadyAt: 0,
     passiveCdUntil: 0,
     passiveEnabled: false,
@@ -1028,12 +1177,57 @@ function heal(fighter, amount) {
 }
 
 function tickStatuses(f) {
+  if (!f) return;
+
+  // ✅ existing timers
   if (f.cooldown > 0) f.cooldown -= 1;
   if (f.frozen > 0) f.frozen -= 1;
   if (f.stunned > 0) f.stunned -= 1;
   if (f.noArmorGain > 0) f.noArmorGain -= 1;
-  if (f.rebootSeal > 0) f.rebootSeal -= 1; // ✅ NEW
+  if (f.rebootSeal > 0) f.rebootSeal -= 1;
   if (f.silenced > 0) f.silenced -= 1;
+
+  // ✅ NEW: Strong stun (cannot attack/skill)
+  if (f.stun2Rounds > 0) f.stun2Rounds -= 1;
+
+  // ✅ NEW: Poison tick (percent of ATK + flat)
+  if (f.poisonRounds > 0) {
+    const pct = Number(f.poisonPct || 0);
+    const flat = Number(f.poisonFlat || 0);
+    const pctDmg = Math.ceil((Number(f.atk || 0)) * pct);
+    const total = Math.max(0, pctDmg + Math.ceil(flat));
+
+    if (total > 0 && Number(f.hp) > 0) {
+      applyDamage(f, total, { silent: true, source: "skill" });
+      log(`☠️ ${f.name} takes ${total} poison damage!`, "warn");
+    }
+
+    f.poisonRounds -= 1;
+
+    // clear when finished
+    if (f.poisonRounds <= 0) {
+      f.poisonPct = 0;
+      f.poisonFlat = 0;
+    }
+  }
+
+  // ✅ NEW: Debuff tick (-ATK, -Armor) each round
+  if (f.debuffRounds > 0) {
+    const dAtk = Number(f.debuffAtk || 0);
+    const dSh = Number(f.debuffShield || 0);
+
+    if (dAtk > 0) f.atk = Math.max(0, Number(f.atk || 0) - dAtk);
+    if (dSh > 0) f.shield = Math.max(0, Number(f.shield || 0) - dSh);
+
+    log(`📉 ${f.name} suffers debuff (-${dAtk} ATK, -${dSh} Armor)!`, "warn");
+
+    f.debuffRounds -= 1;
+
+    if (f.debuffRounds <= 0) {
+      f.debuffAtk = 0;
+      f.debuffShield = 0;
+    }
+  }
 }
 
 // =========================
@@ -1119,28 +1313,37 @@ function enemyDecideAction() {
 // MODAL
 // =========================
 function openModal({ title, text, stageLabel, hint, goldReward, mode }) {
-  $("resultTitle").textContent = title;
-  $("resultText").textContent = text;
-  $("resultStage").textContent = stageLabel;
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
 
-  $("modalHP").textContent = `${state.player.hp}/${state.player.maxHp}`;
-  $("modalShield").textContent = `${state.player.shield}`;
-  $("modalGoldReward").textContent = goldReward != null ? `+${goldReward}` : "+0";
-  $("modalGoldTotal").textContent = `${state.gold}`;
-  $("modalHint").textContent = hint || "";
+  setText("resultTitle", title);
+  setText("resultText", text);
+  setText("resultStage", stageLabel);
+  setText("modalHint", hint || "");
 
-  if (mode === "lose") $("btnNextEnemy").style.display = "none";
-  else $("btnNextEnemy").style.display = "inline-block";
+  // NOTE: Some builds remove the old reward/HP/shield fields from the modal.
+  // Keep these assignments safe so the modal never crashes.
+  setText("modalHP", `${state.player.hp}/${state.player.maxHp}`);
+  setText("modalShield", `${state.player.shield}`);
+  setText("modalGoldReward", goldReward != null ? `+${goldReward}` : "+0");
+  setText("modalGoldTotal", `${state.gold}`);
 
-  $("resultModal").style.display = "flex";
+  // For defeat/victory handling: we keep btnNextEnemy as the primary action button.
+  const btnNext = document.getElementById("btnNextEnemy");
+  if (btnNext) btnNext.style.display = (mode === "hideNext") ? "none" : "inline-block";
+
+  const modal = document.getElementById("resultModal");
+  if (modal) modal.style.display = "flex";
 }
-function closeModal() { $("resultModal").style.display = "none"; }
+function closeModal() { const m = document.getElementById("resultModal"); if (m) m.style.display = "none"; }
 
 // =========================
 // BATTLE FLOW
 // =========================
 function spawnNextEnemy() {
-  const all = getAllCards();
+  const all = getGalleryCards();
   const playerId = state.player.id;
   const pool = all.filter((c) => c.id !== playerId);
   const enemyBase = pool[Math.floor(Math.random() * pool.length)];
@@ -1179,6 +1382,24 @@ if (hasRelic("fieldMedic")) {
   updateUI();
 }
 
+
+function statusMain(f) {
+  if (!f) return "None";
+  if (f.frozen > 0) return "Frozen";
+  if (f.stun2Rounds > 0) return "Stunned";
+  if (f.stunned > 0) return "Stunned(-2)";
+  if (isSilenced(f)) return "Silenced";
+  return "None";
+}
+
+function statusOngoing(f) {
+  if (!f) return "";
+  const parts = [];
+  if ((f.poisonRounds || 0) > 0) parts.push("Poison");
+  if ((f.debuffRounds || 0) > 0) parts.push("Debuff");
+  return parts.length ? ` • ${parts.join(", ")}` : "";
+}
+
 function updateUI() {
   const p = state.player, e = state.enemy;
   if (!p || !e) return;
@@ -1194,9 +1415,22 @@ function updateUI() {
   $("pImg").src = p.img;
   $("pSkillTag").textContent = `${p.base.skillName}`;
 
+  // Ability info tooltip (hover the "i" icon)
+  const pInfo = $("pInfo");
+  if (pInfo) {
+    const cd = (p.cooldown || 0) > 0 ? `Cooldown: ${p.cooldown} turn(s)` : "Ready";
+    pInfo.title = `${p.base.skillName}: ${p.base.skillDesc}\n${cd}`;
+  }
+
   $("eName").textContent = e.name;
   $("eImg").src = e.img;
   $("eSkillTag").textContent = `${e.base.skillName}`;
+
+  const eInfo = $("eInfo");
+  if (eInfo) {
+    const cd = (e.cooldown || 0) > 0 ? `Cooldown: ${e.cooldown} turn(s)` : "Ready";
+    eInfo.title = `${e.base.skillName}: ${e.base.skillDesc}\n${cd}`;
+  }
 
   $("pHP").textContent = `${p.hp}/${p.maxHp}`;
   $("pATK").textContent = p.atk;
@@ -1221,12 +1455,12 @@ function updateUI() {
   const eSeal = e.rebootSeal > 0 ? ` • Reboot Seal: ${e.rebootSeal}` : "";
 
   $("pStatus").textContent =
-    (p.frozen ? "Frozen" : (p.stunned ? "Stunned" : (isSilenced(p) ? "Silenced" : "None"))) +
+    (statusMain(p) + statusOngoing(p)) +
     ((p.skillReadyAt && p.skillReadyAt > Date.now()) ? ` • Skill CD: ${formatSkillCd(p)}` : (p.cooldown ? ` • Skill CD: ${p.cooldown}` : "")) +
     pLock + pSeal;
 
   $("eStatus").textContent =
-    (e.frozen ? "Frozen" : (e.stunned ? "Stunned" : (isSilenced(e) ? "Silenced" : "None"))) +
+    (statusMain(e) + statusOngoing(e)) +
     ((e.skillReadyAt && e.skillReadyAt > Date.now()) ? ` • Skill CD: ${formatSkillCd(e)}` : (e.cooldown ? ` • Skill CD: ${e.cooldown}` : "")) +
     eLock + eSeal;
 
@@ -1243,26 +1477,25 @@ function checkWin() {
   if (!Number.isFinite(Number(p.hp))) p.hp = 0;
   if (e && !Number.isFinite(Number(e.hp))) e.hp = 0;
 
-
-  // LOSE -> flip, then open SHOP modal only
+  // LOSE -> flip, then show Defeat modal (Go Home)
   if (p.hp <= 0) {
     cardDieFlip("player");
     state.phase = "over";
     updateUI();
     playSfx("sfxLose", 0.9);
 
-    // after death flip (0.55s) + 1s delay
+    // After the death flip + a short delay so the last damage/ability effects are visible
     setTimeout(() => {
-      state.modalAction = "shop";
+      state.modalAction = "home";
       const btnNext = $("btnNextEnemy");
-      if (btnNext) btnNext.textContent = "🛒 Shop";
+      if (btnNext) btnNext.textContent = "🏠 Go Home";
       openModal({
         title: "💀 Defeat",
-        text: `You died at Stage ${state.stage}. Spend gold in the shop and try again.`,
+        text: `You died at Stage ${state.stage}.`,
         stageLabel: `Stage ${state.stage}`,
-        hint: "Buy relics / unlock cards, then restart the run.",
+        hint: "Check the battle log above to see what killed you, then go home or restart.",
         goldReward: 0,
-        mode: "shop"
+        mode: "defeat"
       });
     }, 2200);
 
@@ -1300,6 +1533,9 @@ function nextTurn() {
   if (state.turn === "player") tickStatuses(state.player);
   else tickStatuses(state.enemy);
 
+  // ✅ Status effects (poison/debuff) can kill — resolve win/lose immediately
+  if (checkWin()) return;
+
   state.turn = state.turn === "player" ? "enemy" : "player";
   updateUI();
 
@@ -1318,6 +1554,12 @@ function enemyAI() {
 
   if (e.frozen > 0) {
     log(`${e.name} is frozen and skips the turn!`, "warn");
+    nextTurn();
+    return;
+  }
+
+  if (e.stun2Rounds > 0) {
+    log(`${e.name} is stunned and cannot attack or use skill! (${e.stun2Rounds} rounds left)`, "warn");
     nextTurn();
     return;
   }
@@ -1368,6 +1610,12 @@ function playerAttack() {
     return;
   }
 
+  if (p.stun2Rounds > 0) {
+    log(`${p.name} is stunned and cannot act! (${p.stun2Rounds} rounds left)`, "warn");
+    nextTurn();
+    return;
+  }
+
   playSfx("sfxAttack", 0.8);
 
   const dmg = dmgCalc(p);
@@ -1391,6 +1639,16 @@ function playerAttack() {
 
 function playerSkill() {
   const p = state.player, e = state.enemy;
+  if (p.frozen > 0) {
+    log(`${p.name} is frozen and cannot act!`, "warn");
+    nextTurn();
+    return;
+  }
+  if (p.stun2Rounds > 0) {
+    log(`${p.name} is stunned and cannot use a skill! (${p.stun2Rounds} rounds left)`, "warn");
+    nextTurn();
+    return;
+  }
   if (isSilenced(p)) { log(`${p.name} is Silenced and cannot use a skill!`, "warn"); return; }
   const res = p.base.skill(p, e, state);
   if (!res.ok) { log(res.msg, "warn"); return; }
@@ -1711,7 +1969,7 @@ function startGame(playerCardId) {
   state.relics = Object.keys(state.ownedRelics).filter((id) => state.ownedRelics[id]);
 
   const playerBase = findCardById(playerCardId);
-  const all = getAllCards();
+  const all = getGalleryCards();
   const pool = all.filter((c) => c.id !== playerCardId);
   const enemyBase = pool[Math.floor(Math.random() * pool.length)];
 
@@ -1764,23 +2022,35 @@ const safeOn = (id, fn) => {
 };
 
 safeOn("btnNextEnemy", () => {
-  if (state.phase === "over") {
-    playSfx("sfxClick", 0.45);
-    closeModal();
-    if (state.modalAction === "shop") {
-      state.modalAction = null;
-      const btnNext = $("btnNextEnemy");
-      if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
-      showView("shop");
-      renderShopRelics();
-      renderShopCards();
-      setShopTab("relics");
-      return;
-    }
-    state.stage += 1;
-    spawnNextEnemy();
+  if (state.phase !== "over") return;
+
+  playSfx("sfxClick", 0.45);
+  closeModal();
+
+  // Defeat: go back home/setup
+  if (state.modalAction === "home") {
+    state.modalAction = null;
+    const btnNext = $("btnNextEnemy");
+    if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
+    resetAll();
     return;
   }
+
+  // (Legacy) Shop flow
+  if (state.modalAction === "shop") {
+    state.modalAction = null;
+    const btnNext = $("btnNextEnemy");
+    if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
+    showView("shop");
+    renderShopRelics();
+    renderShopCards();
+    setShopTab("relics");
+    return;
+  }
+
+  // Default: proceed to next enemy
+  state.stage += 1;
+  spawnNextEnemy();
 });
 safeOn("btnPlayAgain", () => {
   playSfx("sfxClick", 0.45);
@@ -1795,6 +2065,22 @@ safeOn("btnAttack", () => { playSfx("sfxClick", 0.35); playerAttack(); });
 safeOn("btnSkill", () => { playSfx("sfxClick", 0.35); playerSkill(); });
 safeOn("btnEnd", () => { playSfx("sfxClick", 0.35); playerEndTurn(); });
 safeOn("btnReset", () => { playSfx("sfxClick", 0.35); resetAll(); });
+
+// Ability info (click the "i" icon to also print the description into the battle log)
+safeOn("pInfo", () => {
+  playSfx("sfxClick", 0.2);
+  const p = state.player;
+  if (!p) return;
+  const cd = (p.cooldown || 0) > 0 ? `Cooldown: ${p.cooldown} turn(s)` : "Ready";
+  log(`ℹ️ ${p.name} — ${p.base.skillName}: ${p.base.skillDesc} (${cd})`, "info");
+});
+safeOn("eInfo", () => {
+  playSfx("sfxClick", 0.2);
+  const e = state.enemy;
+  if (!e) return;
+  const cd = (e.cooldown || 0) > 0 ? `Cooldown: ${e.cooldown} turn(s)` : "Ready";
+  log(`ℹ️ ${e.name} — ${e.base.skillName}: ${e.base.skillDesc} (${cd})`, "info");
+});
 
 safeOn("btnBattleNow", () => { playSfx("sfxClick", 0.45); resetAll(); });
 safeOn("btnOpenGallery", () => { playSfx("sfxClick", 0.45); renderGallery(); showView("gallery"); });
