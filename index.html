@@ -158,7 +158,10 @@
                   <span class="roleTag rolePlayer">PLAYER</span>
                   <h3 id="pName">Player</h3>
                 </div>
-                <span class="skillPill" id="pSkillTag">Skill</span>
+                <div class="skillTools">
+                  <span class="skillPill" id="pSkillTag">Skill</span>
+                  <button class="infoBtn" id="pInfo" type="button" aria-label="Player ability info">i</button>
+                </div>
               </div>
 
               <div class="imgFrame" id="pFrame">
@@ -200,7 +203,10 @@
                   <span class="roleTag roleEnemy">ENEMY</span>
                   <h3 id="eName">Enemy</h3>
                 </div>
-                <span class="skillPill" id="eSkillTag">Skill</span>
+                <div class="skillTools">
+                  <span class="skillPill" id="eSkillTag">Skill</span>
+                  <button class="infoBtn" id="eInfo" type="button" aria-label="Enemy ability info">i</button>
+                </div>
               </div>
 
               <div class="imgFrame" id="eFrame">
@@ -283,27 +289,7 @@
       <div class="modalBody">
         <p class="modalText" id="resultText">You defeated the enemy!</p>
 
-        <div class="modalStats">
-          <div class="modalStat">
-            <div class="modalStatLabel">Gold Reward</div>
-            <div class="modalStatValue" id="modalGoldReward">+0</div>
-          </div>
-          <div class="modalStat">
-            <div class="modalStatLabel">Total Gold</div>
-            <div class="modalStatValue" id="modalGoldTotal">0</div>
-          </div>
-        </div>
-
-        <div class="modalStats" style="margin-top:10px;">
-          <div class="modalStat">
-            <div class="modalStatLabel">Your HP</div>
-            <div class="modalStatValue" id="modalHP">0/0</div>
-          </div>
-          <div class="modalStat">
-            <div class="modalStatLabel">Your Shield</div>
-            <div class="modalStatValue" id="modalShield">0</div>
-          </div>
-        </div>
+        <!-- ✅ Defeat modal cleanup: removed Gold / Total / HP / Shield blocks -->
 
         <div class="modalHint" id="modalHint">Next enemy incoming...</div>
       </div>
@@ -328,4 +314,3 @@
   <script src="game.js"></script>
 </body>
 </html>
- 
