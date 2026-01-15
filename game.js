@@ -98,12 +98,27 @@ const BASE_CARDS = [
     def: 2,
     hp: 5,
     skillName: "Freeze Time",
-    skillDesc: "Skip the enemy's next turn (cooldown 2 turns).",
+    skillDesc: "Skip the enemy's next turn, deal damage equal to (enemy Armor - enemy HP), gain +2 Armor, and heal +3 HP. (cooldown 2 turns).",
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      // Skip enemy turn
       foe.frozen = 1;
+
+      // Deal (enemy Armor - enemy HP) as skill damage (can't be negative)
+      const dmg = Math.max(0, (foe.shield || 0) - (foe.hp || 0));
+      if (dmg > 0) applyDamage(foe, dmg, { silent: true, source: "skill" });
+
+      // Gain +2 Armor
+      const gained = gainShield(me, 2);
+
+      // Heal +3 HP
+      const healed = canHeal(me) ? (me.hp = Math.min(me.maxHp, me.hp + 3), 3) : 0;
+
       me.cooldown = 2;
-      return { ok: true, msg: `${me.name} freezes time! Enemy loses their next turn.` };
+
+      const healNote = canHeal(me) ? `+3 HP` : `healing blocked`;
+      return { ok: true, msg: `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, ${healNote}.` };
     }
   },
   {
@@ -221,24 +236,39 @@ const BASE_CARDS = [
     }
   },
   {
-    id: "tremo",
-    name: "Tremo",
-    img: "cards/tremo.png",
-    atk: 8,
-    def: 1,
-    hp: 2,
-    skillName: "Time Rewind",
-    skillDesc: "Heal +3 HP and gain +1 Armor. (cooldown 2)",
-    skill: (me) => {
-      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
-      if (!canHeal(me)) return { ok: false, msg: `Reboot Seal blocks healing! (${me.rebootSeal} turns)` };
+  id: "tremo",
+  name: "Tremo",
+  img: "cards/tremo.png",
+  atk: 8,
+  def: 1,
+  hp: 2,
+  skillName: "Time Rewind",
+  skillDesc: "Heal +4 HP, gain +6 Armor, and deal 9 damage. (cooldown 2)",
+  skill: (me, foe) => {
+    if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
-      me.hp = Math.min(me.maxHp, me.hp + 3);
-      const gained = gainShield(me, 1);
-      me.cooldown = 2;
-      return { ok: true, msg: `${me.name} rewinds time! +3 HP, +${gained} Armor.` };
+    // Heal (blocked by Reboot Seal)
+    const healBlocked = !canHeal(me);
+    if (!healBlocked) me.hp = Math.min(me.maxHp, me.hp + 4);
+
+    // Armor (respects Time Lock + shield cap)
+    const gained = gainShield(me, 6);
+
+    // Ability damage only (armor absorbs first)
+    if (foe && Number(foe.hp) > 0) {
+      applyDamage(foe, 9, { silent: true, source: "skill" });
     }
-  },
+
+    me.cooldown = 2;
+
+    return {
+      ok: true,
+      msg: healBlocked
+        ? `${me.name} rewinds time! Healing was blocked, +${gained} Armor, and deals 9 damage.`
+        : `${me.name} rewinds time! +4 HP, +${gained} Armor, and deals 9 damage.`
+    };
+  }
+},
   {
     id: "angelo",
     name: "Angelo",
@@ -305,15 +335,17 @@ const UNLOCKABLE_CARD_DEFS = {
     def: 2,
     hp: 8,
     skillName: "Radiant Blessing",
-    skillDesc: "Heal +3 Life and gain +2 Armor. If below 50% Life: heal +5 instead. (CD 2)",
+    skillDesc: "Heal +5 Life and gain +3 Armor. If below 70% Life: heal +6 instead. (CD 2)",
     skill: (me) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       if (!canHeal(me)) return { ok: false, msg: `Reboot Seal blocks healing! (${me.rebootSeal} turns)` };
 
-      const belowHalf = me.hp <= Math.floor(me.maxHp * 0.5);
-      const healAmt = belowHalf ? 5 : 3;
+      const below70 = me.hp <= Math.floor(me.maxHp * 0.70);
+      const healAmt = below70 ? 6 : 5;
+
       me.hp = Math.min(me.maxHp, me.hp + healAmt);
-      const gained = gainShield(me, 2);
+      const gained = gainShield(me, 3);
+
       me.cooldown = 2;
       return { ok: true, msg: `${me.name} uses Radiant Blessing! +${healAmt} HP, +${gained} Armor.` };
     }
@@ -321,28 +353,36 @@ const UNLOCKABLE_CARD_DEFS = {
 
   nebulaBladeDancer: {
     id: "nebulaBladeDancer",
-    name: "Nebula Blade Dancer",
+    name: "Space Duelist",
     img: "cards/space-duelist.png",
     atk: 4,
     def: 1,
     hp: 5,
     skillName: "Starstep Combo",
-    skillDesc: "Deal 2 damage three times. If enemy armor becomes 0, deal +2 bonus damage. (CD 2)",
+    skillDesc: "Heal 5 HP, gain +5 Armor, then deal 3 damage three times. If enemy armor hits 0, deal +4 bonus damage. (CD 2)",
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
-      applyDamage(foe, 2, { silent: true, source: "skill", });
-      applyDamage(foe, 2, { silent: true, source: "skill", });
-      applyDamage(foe, 2, { silent: true, source: "skill", });
+      // Heal +5
+      if (canHeal(me)) me.hp = Math.min(me.maxHp, me.hp + 5);
 
+      // Gain +5 Armor (respect cap / Time Lock)
+      const gained = gainShield(me, 5);
+
+      // Deal 3 damage three times
+      applyDamage(foe, 3, { silent: true, source: "skill", });
+      applyDamage(foe, 3, { silent: true, source: "skill", });
+      applyDamage(foe, 3, { silent: true, source: "skill", });
+
+      // Bonus if enemy armor becomes 0
       if (foe.hp > 0 && foe.shield === 0) {
-        applyDamage(foe, 2, { silent: true, source: "skill", });
+        applyDamage(foe, 4, { silent: true, source: "skill", });
         me.cooldown = 2;
-        return { ok: true, msg: `${me.name} uses Starstep Combo! 3 hits + bonus strike!` };
+        return { ok: true, msg: `${me.name} uses Starstep Combo! Healed 5, +${gained} Armor, 3 hits + bonus strike!` };
       }
 
       me.cooldown = 2;
-      return { ok: true, msg: `${me.name} uses Starstep Combo! 3 hits.` };
+      return { ok: true, msg: `${me.name} uses Starstep Combo! Healed 5, +${gained} Armor, 3 hits.` };
     }
   },
 
@@ -354,20 +394,31 @@ const UNLOCKABLE_CARD_DEFS = {
     def: 2,
     hp: 6,
     skillName: "Temporal Collapse",
-    skillDesc: "Deal 3 damage, remove all enemy armor, apply Time Lock (enemy can't gain armor for 2 turns). (CD 3)",
+    skillDesc: "Deal 6 damage, heal 4 HP, remove all enemy armor, apply Time Lock (enemy can't gain armor for 2 turns). (CD 2)",
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
-      applyDamage(foe, 3, { silent: true, source: "skill", });
+      // Damage
+      applyDamage(foe, 6, { silent: true, source: "skill", });
 
+      // Heal
+      let healed = 0;
+      if (canHeal(me)) {
+        const before = me.hp;
+        me.hp = Math.min(me.maxHp, me.hp + 4);
+        healed = me.hp - before;
+      }
+
+      // Remove all enemy armor
       const removed = foe.shield;
       foe.shield = 0;
 
+      // Time Lock (2 turns)
       foe.noArmorGain = Math.max(foe.noArmorGain || 0, 2);
 
-      me.cooldown = 3;
+      me.cooldown = 2;
       updateUI();
-      return { ok: true, msg: `${me.name} collapses time! 3 dmg, removed ${removed} armor, Time Lock (2 turns).` };
+      return { ok: true, msg: `${me.name} collapses time! 6 dmg, healed ${healed}, removed ${removed} armor, Time Lock (2 turns).` };
     }
   },
 
@@ -447,20 +498,24 @@ astroWitch: {
   def: 1,
   hp: 3,
   skillName: "Astral Surge",
-  skillDesc: "Deal 10 true damage (ignores armor). (CD 3)",
+  skillDesc: "Deal 15 true damage (ignores armor). (CD 3)",
   skill: (me, foe) => {
     if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
-    foe.hp = Math.max(0, foe.hp - 10);
-    floatingDamage("enemy", "-10", "bad");
+
+    const dmg = 15;
+    foe.hp = Math.max(0, foe.hp - dmg);
+    floatingDamage("enemy", `-${dmg}`, "bad");
     tryYrolPassive(foe, { source: "skill" });
+
     me.cooldown = 3;
     updateUI();
-    return { ok: true, msg: `${me.name} casts Astral Surge! 10 true damage.` };
+    return { ok: true, msg: `${me.name} casts Astral Surge! ${dmg} true damage.` };
   }
 }
 
 
 ,
+
   // ✅ REDEEM LEGENDARIES
   yrol: {
     id: "yrol",
@@ -683,8 +738,18 @@ function getAllCards() {
   return Array.from(map.values());
 }
 
+// =========================
+// GALLERY CARD POOL (show ALL cards, even locked/unowned)
+// =========================
+function getGalleryCards() {
+  const allUnlockables = Object.keys(UNLOCKABLE_CARD_DEFS || {}).map((id) => UNLOCKABLE_CARD_DEFS[id]).filter(Boolean);
+  const map = new Map();
+  [...BASE_CARDS, ...allUnlockables].forEach((c) => map.set(c.id, c));
+  return Array.from(map.values());
+}
+
 function findCardById(id) {
-  const all = getAllCards();
+  const all = getGalleryCards();
   return all.find((c) => c.id === id) || null;
 }
 
@@ -1001,8 +1066,26 @@ function tryEnemyPassive() {
       log(`Stage ${state.stage} • Round ${state.round}: ${e.name}'s passive — Lucky Charm! Enemy heals +2 HP and gains +${gained} Armor.`, "bad");
     }
   }
+  else if (e.id === "tremo") {
+  // Same effect as Time Rewind (auto each round if passive triggers)
+  const healBlocked = !canHeal(e);
+  if (!healBlocked) {
+    e.hp = Math.min(e.maxHp, e.hp + 4);
+  } else {
+    log(`Stage ${state.stage} • Round ${state.round}: ${e.name}'s passive tried to heal, but Reboot Seal blocked it!`, "warn");
+  }
+
+  const gained = gainShield(e, 6);
+
+  // Deal 9 damage to player (armor absorbs first)
+  applyDamage(p, 9, { silent: true, source: "skill" });
+
+  log(`Stage ${state.stage} • Round ${state.round}: ${e.name}'s passive — Time Rewind! Enemy ${healBlocked ? "couldn't heal" : "heals +4 HP"}, gains +${gained} Armor, and deals 9 damage.`, "bad");
+}
+
   updateUI();
 }
+
 
 // =========================
 // ENEMY AI
@@ -1337,21 +1420,27 @@ function renderPick() {
 
   all.forEach((card) => {
     const div = document.createElement("div");
-    div.className = "cardPick";
+    const isForbiddenPick = card.id === "cosmicGod"; // ✅ Cosmic God cannot be picked by player
+    div.className = "cardPick" + (isForbiddenPick ? " disabledPick" : "");
     div.innerHTML = `
       <img src="${card.img}" alt="${card.name}" />
       <div class="titleRow" style="margin-top:10px;">
-        <strong>${card.name}</strong>
-        <span class="pill">ATK ${card.atk} • DEF ${card.def} • HP ${card.hp}</span>
+        <strong>${card.name}${isForbiddenPick ? " 🔒" : ""}</strong>
+        <span class="pill">Damage ${card.atk} • Armor ${card.def} • Life ${card.hp}</span>
       </div>
       <div class="muted" style="margin-top:6px;">
         <b>${card.skillName}:</b> ${card.skillDesc}
       </div>
+      ${card.id === "cosmicGod" ? `<div class="muted" style="margin-top:8px;"><b>Note:</b> Sealed by Gods (Enemy-only).</div>` : ``}
+      ${isForbiddenPick ? `<div class="muted" style="margin-top:8px;"><b>Note:</b> Sealed by Gods (Enemy-only).</div>` : ``}
     `;
-    div.onclick = () => {
-      playSfx("sfxClick", 0.45);
-      startGame(card.id);
-    };
+
+    if (!isForbiddenPick) {
+      div.onclick = () => {
+        playSfx("sfxClick", 0.45);
+        startGame(card.id);
+      };
+    }
     grid.appendChild(div);
   });
 }
@@ -1361,20 +1450,28 @@ function renderGallery() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  const all = getAllCards();
+  // ✅ Gallery should show ALL cards (base + all shop/redeem defs), even if locked/unowned
+  const all = getGalleryCards();
 
   all.forEach((card) => {
     const div = document.createElement("div");
     div.className = "cardPick";
+
+    const enemyOnly = card.id === "cosmicGod";
+    const lockTag = enemyOnly ? " 🔒" : "";
+
     div.innerHTML = `
       <img src="${card.img}" alt="${card.name}" />
       <div class="titleRow" style="margin-top:10px;">
-        <strong>${card.name}</strong>
-        <span class="pill">ATK ${card.atk} • DEF ${card.def} • HP ${card.hp}</span>
+        <strong>${card.name}${lockTag}</strong>
+        <span class="pill">Damage ${card.atk} • Armor ${card.def} • Life ${card.hp}</span>
       </div>
       <div class="muted" style="margin-top:6px;">
         <b>${card.skillName}:</b> ${card.skillDesc}
       </div>
+
+      ${enemyOnly ? `<div class="muted" style="margin-top:8px;"><b>Note:</b> Sealed by Gods (Enemy-only).</div>` : ``}
+
       <div class="muted" style="margin-top:8px;">
         <b>Enemy passive:</b> Can trigger automatically each round if this card is the enemy.
       </div>
@@ -1382,6 +1479,7 @@ function renderGallery() {
     grid.appendChild(div);
   });
 }
+
 
 
 
@@ -1603,6 +1701,12 @@ function renderShop() {
 // START / RESET
 // =========================
 function startGame(playerCardId) {
+  // ✅ Prevent picking Cosmic God as the player (enemy can still roll it randomly)
+  if (playerCardId === "cosmicGod") {
+    alert("Cosmic God is sealed by the Gods and cannot be selected. (Enemy-only card)");
+    return;
+  }
+
   state.stage = 1;
   state.relics = Object.keys(state.ownedRelics).filter((id) => state.ownedRelics[id]);
 
