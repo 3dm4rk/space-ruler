@@ -824,5 +824,18 @@ body{
 }
 
 
+
 /* Optional: gives the dieFlip rotation more depth */
 .fighters{ perspective: 900px; }
+
+
+/* ✅ Disable player-pick for enemy-only cards */
+.cardPick.disabledPick{
+  opacity:.45;
+  cursor:not-allowed;
+  transform:none !important;
+}
+.cardPick.disabledPick:hover{
+  transform:none;
+  box-shadow: 0 12px 30px rgba(0,0,0,.32);
+}
