@@ -32,7 +32,6 @@ body{
 .muted{ color:var(--muted); }
 .pageTitle{ margin:0; letter-spacing:.3px; }
 .titleRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-
 .heroTopRight{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 /* Buttons */
@@ -211,6 +210,7 @@ body{
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding:14px;
+  position:relative;
 }
 
 .fighters{
@@ -228,6 +228,10 @@ body{
   border-radius: 18px;
   padding:12px;
   overflow:hidden;
+  position:relative;
+  /* allow flip / attack transforms */
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 .fighterCard.player{ outline: 1px solid rgba(79,140,255,.18); }
 .fighterCard.enemy{ outline: 1px solid rgba(255,125,125,.16); }
@@ -271,6 +275,7 @@ body{
   overflow:hidden;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.03);
+  position:relative; /* ✅ for floating damage numbers */
 }
 .cardImg{
   width:100%;
@@ -463,7 +468,7 @@ body{
 }
 
 .modalBox{
-  width:min(520px, 100%);
+  width:min(560px, 100%);
   border-radius: 22px;
   border:1px solid rgba(255,255,255,.10);
   background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
@@ -550,3 +555,274 @@ body{
 @media (max-width:520px){
   .modalActions{ grid-template-columns: 1fr; }
 }
+
+/* ===== RELICS UI ===== */
+.relicSection{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.relicTitleRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.relicTitle{
+  margin:0;
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.2px;
+}
+.relicChoices{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:10px;
+}
+.relicCard{
+  padding:12px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  cursor:pointer;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.relicCard:hover{
+  transform: translateY(-1px);
+  border-color: rgba(79,140,255,.28);
+}
+.relicCard.selected{
+  border-color: rgba(125,255,178,.35);
+  box-shadow: 0 0 0 2px rgba(125,255,178,.10) inset;
+}
+.relicName{
+  font-weight:900;
+}
+.relicDesc{
+  margin-top:6px;
+  color: rgba(233,238,255,.72);
+  font-weight:700;
+  line-height:1.35;
+  font-size:13px;
+}
+.relicNote{
+  margin-top:8px;
+  font-size:12px;
+}
+
+/* ===== HIT EFFECTS (Feature #9) ===== */
+@keyframes shake {
+  0%{ transform: translate(0,0); }
+  20%{ transform: translate(-6px,2px); }
+  40%{ transform: translate(6px,-2px); }
+  60%{ transform: translate(-4px,-1px); }
+  80%{ transform: translate(4px,1px); }
+  100%{ transform: translate(0,0); }
+}
+.shake{
+  animation: shake .22s ease;
+}
+
+@keyframes hitFlash {
+  0%{ box-shadow: 0 0 0 rgba(255,125,125,0); }
+  25%{ box-shadow: 0 0 0 3px rgba(255,125,125,.20) inset; }
+  55%{ box-shadow: 0 0 0 6px rgba(255,125,125,.12) inset; }
+  100%{ box-shadow: 0 0 0 rgba(255,125,125,0); }
+}
+.hitFlash{
+  animation: hitFlash .28s ease;
+}
+
+/* ===== ATTACK TOUCH / LUNGE EFFECTS (requested) ===== */
+@keyframes attackRight {
+  0%   { transform: translateX(0) rotate(0deg) scale(1); }
+  55%  { transform: translateX(38px) rotate(1.8deg) scale(1.03); }
+  70%  { transform: translateX(30px) rotate(0.8deg) scale(1.02); }
+  100% { transform: translateX(0) rotate(0deg) scale(1); }
+}
+@keyframes attackLeft {
+  0%   { transform: translateX(0) rotate(0deg) scale(1); }
+  55%  { transform: translateX(-38px) rotate(-1.8deg) scale(1.03); }
+  70%  { transform: translateX(-30px) rotate(-0.8deg) scale(1.02); }
+  100% { transform: translateX(0) rotate(0deg) scale(1); }
+}
+
+@keyframes defendBump {
+  0%   { transform: translateX(0) scale(1); }
+  35%  { transform: translateX(0) scale(1.02); }
+  75%  { transform: translateX(0) scale(0.995); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+
+@keyframes recoilRight {
+  0%   { transform: translateX(0) rotate(0deg) scale(1); }
+  40%  { transform: translateX(16px) rotate(1deg) scale(0.99); }
+  100% { transform: translateX(0) rotate(0deg) scale(1); }
+}
+@keyframes recoilLeft {
+  0%   { transform: translateX(0) rotate(0deg) scale(1); }
+  40%  { transform: translateX(-16px) rotate(-1deg) scale(0.99); }
+  100% { transform: translateX(0) rotate(0deg) scale(1); }
+}
+
+.fighterCard.recoilRight{ animation: recoilRight .22s ease; }
+.fighterCard.recoilLeft{  animation: recoilLeft .22s ease; }
+
+.fighterCard.attackRight{ animation: attackRight .28s ease; }
+.fighterCard.attackLeft{  animation: attackLeft .28s ease; }
+.fighterCard.defendBump{  animation: defendBump .22s ease; }
+
+/* extra emphasis on the image frame during impact */
+.imgFrame.impactGlow{
+  animation: impactGlow .22s ease;
+}
+@keyframes impactGlow{
+  0%   { box-shadow: 0 0 0 rgba(255,255,255,0); }
+  45%  { box-shadow: 0 0 0 4px rgba(255,210,125,.12), 0 0 26px rgba(255,125,125,.10); }
+  100% { box-shadow: 0 0 0 rgba(255,255,255,0); }
+}
+
+/* ===== DEATH FLIP (requested) ===== */
+@keyframes dieFlip {
+  0%   { transform: rotateY(0deg) scale(1); opacity: 1; filter: grayscale(0); }
+  45%  { transform: rotateY(88deg) scale(1.02); opacity: .95; }
+  100% { transform: rotateY(180deg) scale(.98); opacity: .35; filter: grayscale(1); }
+}
+
+.fighterCard.dieFlip{
+  animation: dieFlip .55s ease forwards;
+}
+
+.floatingDmg{
+  position:absolute;
+  left:50%;
+  top:38%;
+  transform: translate(-50%, -50%);
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.45);
+  font-weight:900;
+  letter-spacing:.2px;
+  pointer-events:none;
+  opacity:0;
+  animation: floatUp .65s ease forwards;
+}
+.floatingDmg.good{ color: rgba(125,255,178,.95); }
+.floatingDmg.bad{ color: rgba(255,125,125,.95); }
+.floatingDmg.warn{ color: rgba(255,210,125,.95); }
+
+@keyframes floatUp {
+  0%{ opacity:0; transform: translate(-50%,-40%) scale(.98); }
+  15%{ opacity:1; transform: translate(-50%,-55%) scale(1); }
+  100%{ opacity:0; transform: translate(-50%,-85%) scale(1.02); }
+}
+
+/* ===== Shop Tabs ===== */
+.shopTabs{
+  margin-top:12px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.tabBtn{
+  padding:10px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  color: rgba(233,238,255,.85);
+  font-weight:900;
+  cursor:pointer;
+  transition: transform .12s ease, opacity .12s ease, border-color .12s ease;
+}
+.tabBtn:hover{ transform: translateY(-1px); opacity:.95; }
+.tabActive{
+  border-color: rgba(79,140,255,.35);
+  background: linear-gradient(135deg, rgba(79,140,255,.20), rgba(124,92,255,.14));
+}
+
+/* Relic owned badge */
+.badgeEquipped{
+  border-color: rgba(125,255,178,.25);
+  color: rgba(125,255,178,.95);
+}
+
+/* =========================
+   SHOP CARD IMAGE = GALLERY CARD SIZE
+   ========================= */
+
+/* Make shop items behave like card tiles */
+.shopItem{
+  overflow: hidden;
+}
+
+/* Shop card image should match gallery card image sizing */
+.shopCardImg{
+  width: 100%;
+  height: auto;
+  display: block;
+
+  /* same “full card” feel as gallery */
+  aspect-ratio: 2 / 3;      /* trading-card ratio */
+  object-fit: cover;        /* fills nicely */
+  object-position: center;  /* centered */
+
+  border-radius: 18px;
+  margin-bottom: 12px;
+
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+
+/* Optional: keep shop cards visually consistent like gallery cards */
+.shopGrid{
+  align-items: stretch;
+}
+
+/* If your shop grid makes cards too wide, this keeps a nice card-like width */
+.shopGrid .shopItem{
+  max-width: 420px; /* adjust if needed */
+}
+
+
+/* =========================
+   ✅ ATTACK FX (slash projectile)
+   (Used by spawnAttackFx() in game.js)
+   ========================= */
+
+#fxLayer{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+}
+
+.attackFx{
+  position: absolute;
+  width: 120px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,210,125,.95), rgba(255,125,125,.95), rgba(255,255,255,0));
+  filter: blur(.2px);
+  transform-origin: center;
+}
+
+@keyframes flySlash{
+  0%{
+    transform: translate(calc(var(--sx) - 60px), calc(var(--sy) - 9px)) rotate(var(--rot)) scale(.85);
+    opacity: 0;
+  }
+  20%{
+    opacity: 1;
+  }
+  100%{
+    transform: translate(calc(var(--tx) - 60px), calc(var(--ty) - 9px)) rotate(var(--rot)) scale(1.05);
+    opacity: 0;
+  }
+}
+
+
+/* Optional: gives the dieFlip rotation more depth */
+.fighters{ perspective: 900px; }
