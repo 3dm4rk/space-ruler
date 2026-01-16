@@ -57,6 +57,7 @@
           <div class="shopTabs">
             <button class="tabBtn tabActive" id="tabShopRelics">🪬 Relics</button>
             <button class="tabBtn" id="tabShopCards">🃏 Upcoming Cards</button>
+            <button class="tabBtn" id="tabShopLucky">🎰 Lucky Draw</button>
           </div>
         </div>
 
@@ -76,6 +77,40 @@
       <div id="shopCardsWrap" style="display:none;">
         <div id="shopGrid" class="shopGrid"></div>
       </div>
+
+      <!-- Lucky Draw tab -->
+      <div id="shopLuckyWrap" style="display:none;">
+        <div class="luckyWrap">
+          <div class="luckyHeader">
+            <div>
+              <h3 class="luckyTitle">🎰 Lucky Draw</h3>
+              <p class="muted" style="margin:6px 0 0;">Spin for rewards. 1% chance to pull the <b>new entity</b> card.</p>
+            </div>
+            <div class="luckyCosts">
+              <span class="pill">Single: 2000 Gold</span>
+              <span class="pill">5x: 10000 Gold</span>
+            </div>
+          </div>
+
+          <div class="luckyMachine" id="luckyMachine">
+            <div class="luckyWheel" id="luckyWheel">
+              <div class="luckyGlow"></div>
+              <div class="luckyCenter">✨</div>
+            </div>
+            <div class="luckyActions">
+              <button class="btn btnPrimary big" id="btnLuckySingle">🎟️ Draw 1</button>
+              <button class="btn btnSoft big" id="btnLuckyFive">🎟️ Draw 5</button>
+            </div>
+            <div class="luckyOdds">
+	              <div class="oddsRow"><span class="badge">1%</span> Card (Relicborn Titan)</div>
+	              <div class="oddsRow"><span class="badge">99%</span> Gold Reward (20 / 100 / 150 / 200 / 250 / 1000 / 2000)</div>
+            </div>
+          </div>
+
+          <div class="luckyResults" id="luckyResults"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -300,6 +335,44 @@
       </div>
     </div>
   </div>
+
+  <!-- 🎰 LUCKY DRAW MODAL -->
+  <div id="luckyModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox luckyModalBox">
+      <div class="modalHeader">
+        <div class="modalTitle" id="luckyModalTitle">🎰 Lucky Draw</div>
+        <div class="modalPill" id="luckyModalPill">Result</div>
+      </div>
+      <div class="modalBody">
+        <!-- ✅ upgraded: multi-draw progress + mini reveals -->
+        <div class="luckyProgress" id="luckyProgress" style="display:none;">
+          <span class="pill" id="luckyProgressPill">1 / 5</span>
+          <span class="muted" id="luckyProgressText">Multi draw</span>
+        </div>
+
+        <div class="luckyReveal">
+          <div class="luckyCard" id="luckyCardReveal">
+            <div class="luckyCardTop">
+              <div class="luckyCardName" id="luckyRewardName">Reward</div>
+              <div class="pill" id="luckyRewardRarity">Common</div>
+            </div>
+            <div class="luckyCardBody" id="luckyRewardBody">
+              <div class="muted">Your reward appears here.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="luckyMultiStrip" id="luckyMultiStrip" style="display:none;"></div>
+
+        <p class="modalHint" id="luckyModalHint">Tap claim to add it to your account.</p>
+      </div>
+      <div class="modalActions">
+        <button class="btn btnPrimary big" id="btnLuckyClaim">✨ Claim</button>
+        <button class="btn btnGhost big" id="btnLuckyClose">Close</button>
+      </div>
+    </div>
+  </div>
+
   
  <!-- ✅ SFX -->
   <audio id="sfxClick" src="sfx/click.mp3" preload="auto"></audio>
@@ -311,6 +384,8 @@
  <audio id="sfxBuy" src="sfx/buy.mp3" preload="auto"></audio>
  
   
-  <script src="game.js"></script>
+    <audio id="sfxDraw" src="sfx/draw.mp3" preload="auto"></audio>
+  <audio id="sfxJackpot" src="sfx/jackpot.mp3" preload="auto"></audio>
+<script src="game.js?v=4"></script>
 </body>
 </html>
