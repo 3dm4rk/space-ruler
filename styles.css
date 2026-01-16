@@ -772,6 +772,17 @@ body{
   animation: dieFlip .55s ease forwards;
 }
 
+/* ===== REVIVE ANIMATION (Phoenix Ember) ===== */
+@keyframes reviveFlip {
+  0%   { transform: rotateY(180deg) scale(.98); opacity: .35; filter: grayscale(1); box-shadow: 0 0 0 rgba(255,210,125,0); }
+  45%  { transform: rotateY(90deg) scale(1.02); opacity: .85; filter: grayscale(.3); box-shadow: 0 0 0 3px rgba(255,210,125,.14) inset, 0 0 26px rgba(255,210,125,.10); }
+  100% { transform: rotateY(0deg) scale(1); opacity: 1; filter: grayscale(0); box-shadow: 0 0 0 0 rgba(255,210,125,0); }
+}
+
+.fighterCard.reviveFlip{
+  animation: reviveFlip .62s ease forwards;
+}
+
 .floatingDmg{
   position:absolute;
   left:50%;
@@ -898,6 +909,215 @@ body{
     transform: translate(calc(var(--tx) - 60px), calc(var(--ty) - 9px)) rotate(var(--rot)) scale(1.05);
     opacity: 0;
   }
+}
+
+/* =========================
+   🔥 PHOENIX REVIVE FX
+   (Used by spawnReviveFx() + cardReviveFlip())
+   ========================= */
+
+/* small pulse/glow applied to the card itself */
+.fighterCard.revivePulse{
+  animation: revivePulse 700ms ease-out;
+}
+
+@keyframes revivePulse{
+  0%{ transform: translateY(0) scale(1); filter: saturate(.8) brightness(.95); }
+  35%{ transform: translateY(-6px) scale(1.03); filter: saturate(1.25) brightness(1.15); }
+  100%{ transform: translateY(0) scale(1); filter: saturate(1) brightness(1); }
+}
+
+/* ring + spark burst anchored at the card center */
+.reviveFx{
+  position:absolute;
+  width: 1px;
+  height: 1px;
+  transform: translate(-0.5px, -0.5px);
+  z-index: 9999;
+}
+
+.reviveFx::before{
+  content:"";
+  position:absolute;
+  left:50%; top:50%;
+  width: 18px; height: 18px;
+  transform: translate(-50%,-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.60), rgba(255,210,125,.45) 35%, rgba(255,125,125,.20) 60%, rgba(255,255,255,0) 72%);
+  box-shadow:
+    0 0 26px rgba(255,210,125,.26),
+    0 0 70px rgba(255,125,125,.12);
+  animation: phoenixRing 900ms ease-out forwards;
+  filter: blur(.2px);
+}
+
+.reviveFx::after{
+  content:"";
+  position:absolute;
+  left:50%; top:50%;
+  width: 6px; height: 6px;
+  transform: translate(-50%,-50%);
+  border-radius: 999px;
+  background: rgba(255,210,125,.95);
+  /* fake particles using multi-shadow dots */
+  box-shadow:
+    18px -8px 0 rgba(255,210,125,.85),
+    -16px -10px 0 rgba(255,255,255,.70),
+    10px 18px 0 rgba(255,125,125,.60),
+    -12px 16px 0 rgba(255,210,125,.55),
+    28px 10px 0 rgba(255,255,255,.45),
+    -26px 8px 0 rgba(255,125,125,.38),
+    0px -26px 0 rgba(255,210,125,.55),
+    0px 28px 0 rgba(255,255,255,.35);
+  animation: phoenixSparks 950ms ease-out forwards;
+}
+
+@keyframes phoenixRing{
+  0%{ opacity:0; transform: translate(-50%,-50%) scale(.5); }
+  12%{ opacity:1; }
+  55%{ opacity:.95; transform: translate(-50%,-50%) scale(6.2); }
+  100%{ opacity:0; transform: translate(-50%,-50%) scale(8.0); }
+}
+
+@keyframes phoenixSparks{
+  0%{ opacity:0; transform: translate(-50%,-50%) scale(.6); filter: blur(0px); }
+  12%{ opacity:1; }
+  60%{ opacity:.92; transform: translate(-50%,-50%) scale(2.6); filter: blur(.1px); }
+  100%{ opacity:0; transform: translate(-50%,-50%) scale(3.2); filter: blur(.2px); }
+}
+
+/* 🔥 Extra-large phoenix flare (used with .reviveFx) */
+.reviveFx.reviveFxBig::before{
+  width: 22px;
+  height: 22px;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255,255,255,.72), rgba(255,210,125,.55) 35%, rgba(255,125,125,.26) 62%, rgba(255,255,255,0) 74%);
+  box-shadow:
+    0 0 34px rgba(255,210,125,.32),
+    0 0 110px rgba(255,125,125,.16);
+  animation-duration: 980ms;
+}
+.reviveFx.reviveFxBig::after{
+  animation-duration: 1100ms;
+}
+
+/* Ember shockwave: a conic-ish flame burst */
+.reviveEmbers{
+  position:absolute;
+  width: 1px;
+  height: 1px;
+  transform: translate(-0.5px, -0.5px);
+  z-index: 9999;
+}
+.reviveEmbers::before{
+  content:"";
+  position:absolute;
+  left:50%; top:50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%,-50%);
+  border-radius: 999px;
+  background:
+    conic-gradient(from 210deg,
+      rgba(255,210,125,.00),
+      rgba(255,210,125,.55),
+      rgba(255,125,125,.35),
+      rgba(255,255,255,.45),
+      rgba(255,210,125,.55),
+      rgba(255,210,125,.00));
+  filter: blur(.4px);
+  mix-blend-mode: screen;
+  animation: emberBurst 950ms ease-out forwards;
+}
+.reviveEmbers::after{
+  content:"";
+  position:absolute;
+  left:50%; top:50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%,-50%);
+  border-radius: 999px;
+  background: rgba(255,255,255,.75);
+  box-shadow:
+    22px  2px 0 rgba(255,210,125,.55),
+    -24px -2px 0 rgba(255,125,125,.38),
+    10px -24px 0 rgba(255,255,255,.42),
+    -8px  26px 0 rgba(255,210,125,.42),
+    30px  18px 0 rgba(255,255,255,.26),
+    -30px 16px 0 rgba(255,210,125,.22);
+  animation: emberSparks 1050ms ease-out forwards;
+  filter: blur(.15px);
+}
+
+@keyframes emberBurst{
+  0%{ opacity:0; transform: translate(-50%,-50%) scale(.35); }
+  14%{ opacity:1; }
+  55%{ opacity:.95; transform: translate(-50%,-50%) scale(7.2); }
+  100%{ opacity:0; transform: translate(-50%,-50%) scale(9.6); }
+}
+
+@keyframes emberSparks{
+  0%{ opacity:0; transform: translate(-50%,-50%) scale(.55); }
+  14%{ opacity:1; }
+  65%{ opacity:.9; transform: translate(-50%,-50%) scale(2.9); }
+  100%{ opacity:0; transform: translate(-50%,-50%) scale(3.7); }
+}
+
+/* Quick full-screen flash to sell the revival */
+.reviveScreenFlare{
+  position: fixed;
+  inset: 0;
+  pointer-events:none;
+  z-index: 9997;
+  background:
+    radial-gradient(800px 420px at 50% 38%, rgba(255,210,125,.18), transparent 60%),
+    radial-gradient(680px 360px at 50% 38%, rgba(255,125,125,.12), transparent 62%);
+  animation: reviveFlare 420ms ease-out forwards;
+}
+
+@keyframes reviveFlare{
+  0%{ opacity: 0; }
+  25%{ opacity: 1; }
+  100%{ opacity: 0; }
+}
+
+/* Toast message layer */
+#toastLayer{
+  position: fixed;
+  top: 16px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.toast{
+  margin: 0 12px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(10,14,28,.86);
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+  font-weight: 900;
+  letter-spacing: .3px;
+  opacity: 0;
+  transform: translateY(-8px) scale(.98);
+  animation: toastPop 1550ms ease forwards;
+}
+
+.toast.good{
+  border-color: rgba(125,255,178,.18);
+  box-shadow: 0 18px 60px rgba(0,0,0,.55), 0 0 30px rgba(125,255,178,.08);
+}
+
+@keyframes toastPop{
+  0%{ opacity:0; transform: translateY(-8px) scale(.98); }
+  18%{ opacity:1; transform: translateY(0px) scale(1); }
+  75%{ opacity:1; transform: translateY(0px) scale(1); }
+  100%{ opacity:0; transform: translateY(-8px) scale(.99); }
 }
 
 
@@ -1260,4 +1480,125 @@ body{
   0%{ transform: scale(1); }
   35%{ transform: scale(1.01); }
   100%{ transform: scale(1); }
+}
+
+/* =========================
+   👤 PROFILE + RANK SYSTEM
+   ========================= */
+
+.profileCard{
+  margin-top:14px;
+  padding:16px;
+  border-radius: var(--radius);
+  border:1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  box-shadow: var(--shadow);
+}
+
+.profileTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  flex-wrap:wrap;
+}
+
+.profileNameRow{
+  margin-top:8px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.profileInput{
+  width:min(320px, 100%);
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  color: rgba(233,238,255,.92);
+  font-weight:900;
+  outline:none;
+}
+
+.rankBadge{
+  padding:10px 14px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: radial-gradient(600px 220px at 20% 20%, rgba(79,140,255,.22), rgba(124,92,255,.14));
+  font-weight:1000;
+  letter-spacing:.4px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+
+.rankProgress{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.rankProgressTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.rankBar{
+  margin-top:10px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  overflow:hidden;
+}
+.rankBarFill{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background: linear-gradient(90deg, rgba(255,210,125,.92), rgba(79,140,255,.86), rgba(124,92,255,.75));
+  transition: width .28s ease;
+}
+
+.profileStatsGrid{
+  margin-top:14px;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap:12px;
+}
+
+.statCard{
+  padding:14px;
+  border-radius: 18px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.20);
+}
+.statLabel{
+  font-size:12px;
+  font-weight:900;
+  color: rgba(233,238,255,.72);
+  letter-spacing:.3px;
+}
+.statValue{
+  margin-top:8px;
+  font-size:26px;
+  font-weight:1000;
+}
+
+.profileFoot{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.profileRelic{
+  padding:10px 12px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  font-weight:1000;
 }
