@@ -32,6 +32,56 @@ body{
 .muted{ color:var(--muted); }
 .pageTitle{ margin:0; letter-spacing:.3px; }
 .titleRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+
+/* Lore tooltip (Gallery) */
+.infoWrap{ position:relative; display:inline-flex; align-items:center; margin-left:6px; }
+.infoIcon{
+  width:18px; height:18px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.06);
+  font-size:12px;
+  font-weight:900;
+  cursor:help;
+  user-select:none;
+}
+.loreTooltip{
+  position:absolute;
+  left:50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  width: min(340px, 70vw);
+  padding:10px 12px;
+  border-radius:14px;
+  background: rgba(10,14,28,.96);
+  border:1px solid var(--line);
+  box-shadow: 0 18px 60px rgba(0,0,0,.6);
+  color: var(--text);
+  font-size:12px;
+  line-height:1.35;
+  opacity:0;
+  pointer-events:none;
+  z-index: 50;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.infoWrap:hover .loreTooltip,
+.infoWrap.showLore .loreTooltip,
+.infoIcon:focus + .loreTooltip{
+  opacity:1;
+  pointer-events:auto;
+  transform: translateX(-50%) translateY(0px);
+}
+.loreTooltip::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:100%;
+  transform: translateX(-50%);
+  border:8px solid transparent;
+  border-top-color: rgba(10,14,28,.96);
+}
 .heroTopRight{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 /* Buttons */
@@ -864,4 +914,350 @@ body{
 .cardPick.disabledPick:hover{
   transform:none;
   box-shadow: 0 12px 30px rgba(0,0,0,.32);
+}
+
+
+/* =========================
+   🎰 LUCKY DRAW UI
+   ========================= */
+
+.luckyWrap{
+  margin-top: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.32);
+  overflow: hidden;
+}
+
+.luckyHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.luckyTitle{
+  margin: 0;
+  font-weight: 1000;
+  letter-spacing: .3px;
+}
+
+.luckyCosts{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.luckyMachine{
+  margin-top: 14px;
+  display:grid;
+  gap: 12px;
+}
+
+.luckyWheel{
+  position: relative;
+  width: min(420px, 100%);
+  height: 220px;
+  margin: 0 auto;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: radial-gradient(700px 240px at 20% 20%, rgba(79,140,255,.22), transparent 60%),
+              radial-gradient(700px 240px at 80% 60%, rgba(124,92,255,.18), transparent 60%),
+              rgba(0,0,0,.20);
+  box-shadow: 0 18px 60px rgba(0,0,0,.45);
+  overflow:hidden;
+}
+
+.luckyGlow{
+  position:absolute; inset:-40px;
+  background: radial-gradient(closest-side, rgba(255,210,125,.20), transparent 70%);
+  filter: blur(6px);
+  animation: luckyPulse 1.15s ease-in-out infinite;
+  opacity: .85;
+}
+
+@keyframes luckyPulse{
+  0%{ transform: scale(.98); opacity: .65; }
+  50%{ transform: scale(1.03); opacity: .95; }
+  100%{ transform: scale(.98); opacity: .65; }
+}
+
+.luckyCenter{
+  position:absolute;
+  left:50%; top:50%;
+  transform: translate(-50%, -50%);
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  display:grid;
+  place-items:center;
+  font-size: 34px;
+  font-weight: 1000;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.06) inset, 0 18px 60px rgba(0,0,0,.45);
+}
+
+.luckyWheel.spinning .luckyGlow{
+  animation-duration: .55s;
+}
+
+@keyframes luckySpinWiggle{
+  0%{ transform: translateY(0) rotate(0deg) scale(1); }
+  15%{ transform: translateY(-2px) rotate(-1deg) scale(1.01); }
+  35%{ transform: translateY(2px) rotate(1deg) scale(1.01); }
+  60%{ transform: translateY(-1px) rotate(-.6deg) scale(1.01); }
+  100%{ transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+.luckyWheel.spinning{
+  animation: luckySpinWiggle .55s ease-in-out infinite;
+}
+
+.luckyActions{
+  display:flex;
+  gap: 10px;
+  justify-content:center;
+  flex-wrap: wrap;
+}
+
+.luckyOdds{
+  display:grid;
+  gap: 8px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.oddsRow{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.luckyResults{
+  margin-top: 14px;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.luckyChip{
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  font-weight: 900;
+  color: rgba(233,238,255,.86);
+}
+
+.luckyChip.legendary{
+  border-color: rgba(255,210,125,.30);
+  box-shadow: 0 0 0 2px rgba(255,210,125,.10) inset, 0 18px 60px rgba(255,210,125,.08);
+}
+
+.luckyModalBox{
+  border-color: rgba(255,210,125,.20);
+}
+
+/* =========================
+   🎰 Lucky Draw (Upgraded)
+   - Flip reveal
+   - Multi-draw strip
+   - Confetti + screen shake
+   ========================= */
+
+.luckyProgress{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin: 2px 0 10px;
+}
+
+.luckyMultiStrip{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.luckyMini{
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  display:grid;
+  place-items:center;
+  font-weight: 1000;
+  position: relative;
+  overflow:hidden;
+}
+
+.luckyMini::after{
+  content:"";
+  position:absolute;
+  inset:-40px;
+  background: radial-gradient(closest-side, rgba(79,140,255,.20), transparent 70%);
+  filter: blur(10px);
+  opacity:.35;
+}
+
+.luckyMini.revealed{ border-color: rgba(255,255,255,.16); }
+.luckyMini.revealed.legendary{ border-color: rgba(255,210,125,.40); box-shadow: 0 0 0 2px rgba(255,210,125,.12) inset; }
+
+.luckyMiniIcon{ position:relative; z-index:2; font-size: 18px; }
+
+.luckyCard.flipIn{
+  transform-origin: 50% 60%;
+  animation: luckyFlipIn .48s cubic-bezier(.2,.9,.2,1);
+}
+
+@keyframes luckyFlipIn{
+  0%{ transform: perspective(900px) rotateX(18deg) scale(.92); opacity: 0; filter: blur(2px); }
+  55%{ transform: perspective(900px) rotateX(-6deg) scale(1.02); opacity: 1; filter: blur(0px); }
+  100%{ transform: perspective(900px) rotateX(0deg) scale(1); }
+}
+
+.luckyCard.legendaryBurst{
+  box-shadow: 0 0 0 2px rgba(255,210,125,.14) inset,
+              0 22px 80px rgba(255,210,125,.18),
+              0 18px 60px rgba(0,0,0,.45);
+}
+
+.luckyShake{
+  animation: luckyShake .40s ease;
+}
+
+@keyframes luckyShake{
+  0%{ transform: translateX(0) }
+  15%{ transform: translateX(-6px) }
+  30%{ transform: translateX(6px) }
+  45%{ transform: translateX(-4px) }
+  60%{ transform: translateX(4px) }
+  75%{ transform: translateX(-2px) }
+  100%{ transform: translateX(0) }
+}
+
+.confettiHost{
+  position: fixed;
+  inset: 0;
+  pointer-events:none;
+  z-index: 99999;
+}
+
+.confettiPiece{
+  position:absolute;
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  opacity: .9;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,.25));
+  animation: confettiFall var(--t, 1600ms) linear var(--d, 0ms) forwards;
+  transform: translate3d(0,-20px,0) rotate(0deg);
+}
+
+@keyframes confettiFall{
+  0%{ transform: translate3d(0,-20px,0) rotate(0deg); opacity: 0; }
+  10%{ opacity: 1; }
+  100%{ transform: translate3d(var(--x, 0px), calc(100vh + 40px), 0) rotate(720deg); opacity: 0; }
+}
+
+.luckyReveal{
+  display:flex;
+  justify-content:center;
+  margin-top: 8px;
+}
+
+.luckyCard{
+  width: min(420px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  overflow:hidden;
+  box-shadow: 0 18px 60px rgba(0,0,0,.45);
+  animation: popIn .18s ease;
+}
+
+.luckyCardTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+}
+
+.luckyCardName{
+  font-weight: 1000;
+}
+
+.luckyCardBody{
+  padding: 14px;
+  color: rgba(233,238,255,.82);
+  line-height: 1.45;
+}
+
+@keyframes jackpotGlow{
+  0%{ box-shadow: 0 0 0 rgba(255,210,125,0), 0 18px 60px rgba(0,0,0,.45); }
+  50%{ box-shadow: 0 0 0 2px rgba(255,210,125,.16) inset, 0 0 40px rgba(255,210,125,.18), 0 18px 60px rgba(0,0,0,.45); }
+  100%{ box-shadow: 0 0 0 rgba(255,210,125,0), 0 18px 60px rgba(0,0,0,.45); }
+}
+
+.luckyCard.jackpot{
+  animation: jackpotGlow .85s ease-in-out infinite;
+}
+
+
+.luckyResultItem{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:12px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.20);
+}
+.luckyResultLeft{
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display:grid;
+  place-items:center;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+  flex: 0 0 auto;
+}
+.luckyResultItem.legendary{
+  border-color: rgba(255,210,125,.30);
+  box-shadow: 0 0 0 2px rgba(255,210,125,.08) inset;
+}
+.luckyResultItem.rare{
+  border-color: rgba(79,140,255,.25);
+}
+.luckyResultItem.epic{
+  border-color: rgba(124,92,255,.25);
+}
+.luckyBigIcon{
+  font-size: 42px;
+}
+.luckyBigText{
+  font-size: 18px;
+  font-weight: 1000;
+  margin-top: 10px;
+}
+
+
+.luckyMachine.pulse{
+  animation: luckyPulse .65s ease;
+}
+@keyframes luckyPulse{
+  0%{ transform: scale(1); }
+  35%{ transform: scale(1.01); }
+  100%{ transform: scale(1); }
 }
