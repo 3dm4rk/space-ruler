@@ -26,7 +26,84 @@ body{
     linear-gradient(180deg, var(--bg0), var(--bg1));
 }
 
-.screen{ min-height:100vh; padding:26px 18px; }
+/* =========================
+   📱 Mobile responsiveness
+   ========================= */
+
+html{ -webkit-text-size-adjust: 100%; }
+body{ overflow-x:hidden; }
+
+/* Make taps feel snappy + reduce accidental double-tap zoom behavior */
+button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
+
+/* iOS safe-area padding (notches) */
+.screen{
+  padding-left: calc(18px + env(safe-area-inset-left));
+  padding-right: calc(18px + env(safe-area-inset-right));
+  padding-top: calc(26px + env(safe-area-inset-top));
+  padding-bottom: calc(26px + env(safe-area-inset-bottom));
+}
+
+/* Prevent long rows (lots of pills/buttons) from breaking layout on small screens */
+.titleRow{ min-width: 0; }
+.pill, .chip{ max-width: 100%; }
+
+/* Modals should always be fully usable on short screens */
+.modalBox{
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Improve text wrapping for long logs/labels */
+.log p{ overflow-wrap: anywhere; }
+
+/* Smaller devices */
+@media (max-width: 720px){
+  .screen{
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    padding-top: calc(18px + env(safe-area-inset-top));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .hero{ min-height: auto; }
+  .heroCard{ padding: 18px; border-radius: 22px; }
+
+  /* Stack topbars so everything stays visible */
+  .topbar, .gameTop{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .topbarActions, .gameTopActions{
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Make button groups wrap nicely and avoid tiny tap targets */
+  .btn, .tabBtn{ min-height: 44px; }
+  .btn{ padding: 11px 14px; }
+
+  /* Reduce card image height so arena + buttons fit in one screen more often */
+  .cardImg{ height: 240px; }
+  .log{ height: clamp(180px, 28vh, 300px); }
+}
+
+/* Very small phones */
+@media (max-width: 420px){
+  .heroTitle{ font-size: clamp(28px, 8vw, 40px); }
+  .heroSub{ font-size: 14px; }
+  .pageTitle{ font-size: 18px; }
+  .fighterName h3{ font-size: 16px; }
+  .cardImg{ height: 210px; }
+  .actionDock{ gap: 8px; }
+}
+
+/* Disable hover lift on touch devices (prevents "stuck" hover states) */
+@media (hover:none){
+  .btn:hover, .tabBtn:hover, .cardPick:hover{ transform:none; opacity:1; }
+}
+
+.screen{ min-height:100vh; min-height:100dvh; padding:26px 18px; }
 .wrap{ max-width:1180px; margin:0 auto; }
 
 .muted{ color:var(--muted); }
@@ -187,6 +264,25 @@ body{
   position:relative;
   display:flex; gap:10px; flex-wrap:wrap;
   margin-top:16px;
+}
+
+/* ✅ Missions (text only guide) */
+.missionText{
+  position:relative;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  color: rgba(233,238,255,.82);
+  font-weight: 900;
+  line-height: 1.45;
+}
+.missionText .mutedLine{
+  display:block;
+  margin-top: 6px;
+  color: rgba(233,238,255,.68);
+  font-weight: 800;
 }
 .hint{
   padding:10px 12px;
@@ -418,7 +514,7 @@ body{
 .actionDock{
   margin-top:14px;
   display:grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap:10px;
 }
 @media (max-width: 620px){
@@ -629,8 +725,235 @@ body{
   gap:10px;
 }
 
+/* One-button modal layout */
+.modalActions.single{ grid-template-columns: 1fr; }
+
 @media (max-width:520px){
   .modalActions{ grid-template-columns: 1fr; }
+}
+
+/* =========================
+   📜 STORY MODE
+   ========================= */
+
+.storyCard{
+  margin-top: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border:1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 18px;
+  overflow:hidden;
+  position:relative;
+}
+.storyCard:before{
+  content:"";
+  position:absolute; inset:-2px;
+  background: radial-gradient(720px 280px at 25% 10%, rgba(79,140,255,.18), transparent 60%);
+  pointer-events:none;
+}
+.storyTitle{
+  position:relative;
+  font-weight: 1000;
+  letter-spacing: .3px;
+  font-size: 22px;
+  margin: 0 0 10px;
+}
+.storyBody{
+  position:relative;
+  color: rgba(233,238,255,.82);
+  line-height: 1.55;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.storyFooter{
+  position:relative;
+  margin-top: 16px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+/* ✅ Story intro animation (fade + cinematic zoom) */
+.storyCard.storyIntro{
+  animation: storyIntro 520ms ease-out;
+}
+@keyframes storyIntro{
+  from{ transform: translateY(12px) scale(.965); opacity: 0; filter: blur(.2px); }
+  to{ transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+}
+
+/* ✅ Typing effect visuals (caret) */
+.storyBody.typing{
+  border-right: 2px solid rgba(233,238,255,.65);
+  padding-right: 8px;
+  animation: caretBlink 900ms steps(1) infinite;
+}
+@keyframes caretBlink{
+  0%, 49%{ border-right-color: rgba(233,238,255,.65); }
+  50%, 100%{ border-right-color: rgba(233,238,255,0); }
+}
+
+/* ✅ Boss preview (COMING SOON portal) */
+.storyBossWrap{
+  position:relative;
+  margin-top: 14px;
+  border-radius: 22px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  overflow:hidden;
+  min-height: 160px;
+}
+.storyBossPortal{
+  position:absolute;
+  inset:-80px;
+  background:
+    conic-gradient(from 220deg,
+      rgba(79,140,255,.0),
+      rgba(79,140,255,.35),
+      rgba(124,92,255,.25),
+      rgba(255,210,125,.18),
+      rgba(255,125,125,.22),
+      rgba(79,140,255,.35),
+      rgba(79,140,255,.0));
+  filter: blur(10px);
+  animation: portalSpin 2.2s linear infinite;
+  opacity: .85;
+}
+.storyBossPortal::after{
+  content:"";
+  position:absolute;
+  inset: 90px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255,255,255,.20), rgba(0,0,0,.92) 62%);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 0 0 2px rgba(79,140,255,.08) inset, 0 0 70px rgba(79,140,255,.10);
+}
+
+/* =========================
+   ✅ Mobile layout tweaks
+   ========================= */
+
+/* On touch devices, disable hover lift so the UI doesn't jitter */
+@media (hover: none){
+  .btn:hover, .tabBtn:hover, .cardPick:hover, .infoBtn:hover{ transform:none; opacity:1; }
+}
+
+/* Stack top bars on phones so everything stays visible */
+@media (max-width: 720px){
+  .screen{ padding: 18px 12px; }
+
+  .hero{ min-height: auto; }
+  .heroCard{ padding: 18px; border-radius: 22px; }
+
+  .topbar, .gameTop{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .topbarActions, .gameTopActions{
+    width: 100%;
+    gap: 8px;
+  }
+
+  /* Turn big button rows into a scroll strip instead of shrinking to unreadable */
+  .gameTopActions{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .gameTopActions .btn{ white-space: nowrap; }
+
+  .heroTop{ flex-direction: column; align-items: flex-start; }
+  .heroTopRight{ width: 100%; }
+
+  .grid{ grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .shopGrid{ grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+  .cardPick img{ height: 220px; }
+  .cardImg{ height: 240px; }
+
+  .log{ height: clamp(180px, 30vh, 300px); }
+}
+
+/* Smaller phones: keep buttons easy to tap */
+@media (max-width: 420px){
+  .btn, .tabBtn{ padding: 12px 14px; }
+  .big{ padding: 14px 16px; }
+  .actionDock{ gap: 8px; }
+}
+.storyBossInner{
+  position:relative;
+  z-index: 2;
+  padding: 18px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.storyBossTag{
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.28);
+  font-weight: 1000;
+  letter-spacing: .7px;
+}
+.storyBossTitle{
+  font-size: 22px;
+  font-weight: 1100;
+  letter-spacing: .6px;
+  text-shadow: 0 0 26px rgba(79,140,255,.18);
+}
+.storyBossSub{
+  font-weight: 1000;
+  letter-spacing: 1.4px;
+  color: rgba(255,210,125,.92);
+}
+@keyframes portalSpin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}
+
+/* =========================
+   🌌 COSMO REVELATION MODAL
+   ========================= */
+
+.cosmoRevealBox{ width: min(640px, 100%); }
+.cosmoRevealHero{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: 180px 1fr;
+  gap:14px;
+  align-items:start;
+}
+@media (max-width:620px){
+  .cosmoRevealHero{ grid-template-columns: 1fr; }
+}
+.cosmoCardFrame{
+  border-radius: 18px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  overflow:hidden;
+  position:relative;
+}
+.cosmoCardFrame img{
+  width:100%;
+  display:block;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  object-position: center;
+}
+.cosmoRevealLore{
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  border-radius: 18px;
+  padding: 14px;
+  line-height: 1.55;
+  color: rgba(233,238,255,.86);
+  white-space: pre-wrap;
 }
 
 /* ===== RELICS UI ===== */
@@ -1223,6 +1546,37 @@ body{
   gap:10px;
 }
 
+.cosmeticsHeaderRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.cosmeticsNav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.miniTab{
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: rgba(233,238,255,.86);
+  font-weight: 1000;
+  cursor:pointer;
+  transition: transform .12s ease, opacity .12s ease, border-color .12s ease, background .12s ease;
+}
+.miniTab:hover{ transform: translateY(-1px); opacity:.96; border-color: rgba(79,140,255,.30); }
+.miniTab:active{ transform: translateY(0); opacity:.92; }
+.miniTabActive{
+  border-color: rgba(125,255,178,.34);
+  background: linear-gradient(135deg, rgba(79,140,255,.18), rgba(124,92,255,.12));
+}
+
 .cosmeticsTitle{ margin:0; font-size:14px; font-weight: 1000; letter-spacing:.2px; }
 
 .cosmeticsBlock{ margin-top: 12px; }
@@ -1662,6 +2016,47 @@ body{
   line-height: 1.45;
 }
 
+/* ✅ Lucky modal sizing fix: keep Claim buttons clickable even when reward has a big image */
+.luckyModalBox{
+  display:flex;
+  flex-direction:column;
+  max-height: 92vh;
+}
+.luckyModalBox .modalBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
+}
+.luckyModalBox .modalActions{
+  flex: 0 0 auto;
+}
+
+/* If reward content injects a card image (uses .cardImg), cap it inside Lucky modal */
+#luckyModal .cardImg{
+  height: 220px;
+  max-height: 30vh;
+}
+#luckyModal .luckyCardBody img{
+  max-width:100%;
+  height:auto;
+  max-height: 32vh;
+}
+
+/* 5x draw card images */
+.luckyMultiImg{
+  width:100%;
+  height: 120px;
+  object-fit: contain;
+  object-position: center;
+  display:block;
+  margin: 10px 0 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  padding: 8px;
+}
+
 @keyframes jackpotGlow{
   0%{ box-shadow: 0 0 0 rgba(255,210,125,0), 0 18px 60px rgba(0,0,0,.45); }
   50%{ box-shadow: 0 0 0 2px rgba(255,210,125,.16) inset, 0 0 40px rgba(255,210,125,.18), 0 18px 60px rgba(0,0,0,.45); }
@@ -1761,6 +2156,16 @@ body{
   outline:none;
 }
 
+/* Fix Chrome/Edge autofill turning inputs white */
+.profileInput:-webkit-autofill,
+.profileInput:-webkit-autofill:hover,
+.profileInput:-webkit-autofill:focus{
+  -webkit-text-fill-color: rgba(233,238,255,.92);
+  transition: background-color 9999s ease-in-out 0s;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.22) inset;
+  border: 1px solid rgba(255,255,255,.12);
+}
+
 .rankBadge{
   padding:10px 14px;
   border-radius:999px;
@@ -1804,6 +2209,43 @@ body{
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap:12px;
 }
+
+/* =========================
+   🤫 SECRETS (non-shop upgrades)
+   ========================= */
+
+.secretsModalBox{
+  width:min(640px, 100%);
+  max-height: 82vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Keep header fixed-ish and make body scroll so the modal never goes off-screen */
+.secretsModalBox .modalBody{
+  overflow:auto;
+  max-height: 70vh;
+  -webkit-overflow-scrolling: touch;
+}
+.secretsList{ margin-top:12px; }
+.secretsRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px 0;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.secretsRow:first-child{ border-top:none; }
+.secretsLeft{ min-width:0; }
+.secretsTitleLine{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.secretsTitleLine b{ font-size:15px; }
+.secretsMeta{ margin-top:6px; color: rgba(233,238,255,.72); font-weight:700; font-size:13px; }
 
 .statCard{
   padding:14px;
@@ -1859,6 +2301,38 @@ body{
   gap:10px;
 }
 
+.cosmeticsHeaderRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.cosmeticsNav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.miniTab{
+  padding:8px 10px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: rgba(233,238,255,.86);
+  font-weight: 1000;
+  cursor: pointer;
+  transition: transform .12s ease, opacity .12s ease, border-color .12s ease, background .12s ease;
+  box-shadow: 0 10px 22px rgba(0,0,0,.25);
+}
+.miniTab:hover{ transform: translateY(-1px); opacity: .96; border-color: rgba(79,140,255,.28); }
+.miniTab:active{ transform: translateY(0); opacity: .92; }
+.miniTabActive{
+  border-color: rgba(79,140,255,.35);
+  background: linear-gradient(135deg, rgba(79,140,255,.20), rgba(124,92,255,.14));
+}
+
 .cosmeticsTitle{
   margin:0;
   font-size:15px;
@@ -1877,7 +2351,42 @@ body{
   gap:10px;
 }
 
-.cosmeticItem{
+/* ✅ Cosmetics tiles (used by game.js: .cosItem / .cosIcon / .cosLabel)
+   This also fixes the "white background" default button look on Profile. */
+.cosItem{
+  appearance:none;
+  -webkit-appearance:none;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.20);
+  border-radius: 18px;
+  padding: 12px;
+  cursor:pointer;
+  color: rgba(233,238,255,.86);
+  box-shadow: 0 12px 30px rgba(0,0,0,.30);
+  transition: transform .12s ease, border-color .12s ease, background .12s ease, opacity .12s ease;
+  display:grid;
+  gap:8px;
+  align-items:center;
+  justify-items:center;
+}
+.cosItem:hover{ transform: translateY(-1px); border-color: rgba(79,140,255,.28); }
+.cosItem.selected{ border-color: rgba(125,255,178,.38); box-shadow: 0 0 0 2px rgba(125,255,178,.10) inset, 0 14px 46px rgba(0,0,0,.35); }
+.cosItem.locked{ opacity:.55; cursor:not-allowed; }
+.cosIcon{ font-size: 28px; line-height:1; }
+.cosLabel{
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .25px;
+  color: rgba(233,238,255,.72);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+}
+
+.cosmeticItem,
+/* JS uses .cosItem (keep both so nothing renders unstyled) */
+.cosItem{
   padding:12px;
   border-radius: 18px;
   border:1px solid rgba(255,255,255,.10);
@@ -1890,9 +2399,31 @@ body{
   transition: transform .12s ease, border-color .12s ease, background .12s ease;
 }
 
-.cosmeticItem:hover{ transform: translateY(-1px); border-color: rgba(79,140,255,.28); }
-.cosmeticItem.selected{ border-color: rgba(125,255,178,.35); box-shadow: 0 0 0 2px rgba(125,255,178,.10) inset; }
-.cosmeticItem.locked{ opacity:.55; }
+.cosmeticItem:hover,
+.cosItem:hover{ transform: translateY(-1px); border-color: rgba(79,140,255,.28); }
+.cosmeticItem.selected,
+.cosItem.selected{ border-color: rgba(125,255,178,.35); box-shadow: 0 0 0 2px rgba(125,255,178,.10) inset; }
+.cosmeticItem.locked,
+.cosItem.locked{ opacity:.55; }
+
+/* Cosmetics buttons are <button> elements; remove default browser styles */
+.cosItem{
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: center;
+  color: rgba(233,238,255,.86);
+  box-shadow: 0 12px 30px rgba(0,0,0,.30);
+}
+.cosItem:focus-visible{ outline: 2px solid rgba(79,140,255,.55); outline-offset: 2px; }
+
+/* JS markup: <div class="cosIcon">...</div><div class="cosLabel">...</div> */
+.cosIcon{ font-size: 28px; line-height: 1; }
+.cosLabel{
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .35px;
+  color: rgba(233,238,255,.76);
+}
 
 .cosEmoji{
   font-size: 28px;
@@ -2098,3 +2629,366 @@ body{
   to{ opacity: 0; transform: translateX(-50%) translateY(-10px) scale(.98); }
 }
 
+/* ===== 🎁 Redeem Reveal (cool modal) ===== */
+.redeemRevealBox{
+  position: relative;
+  overflow: hidden;
+}
+
+/* animated border glow when shown */
+.redeemRevealBox::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  background: conic-gradient(from 180deg,
+    rgba(255,255,255,0),
+    rgba(79,140,255,.35),
+    rgba(124,92,255,.35),
+    rgba(255,210,125,.25),
+    rgba(255,255,255,0)
+  );
+  filter: blur(10px);
+  opacity: .0;
+  pointer-events:none;
+  animation: redeemBorder 1.2s ease forwards;
+}
+
+@keyframes redeemBorder{
+  0%{ opacity:0; transform: scale(.98); }
+  20%{ opacity:1; }
+  100%{ opacity: .0; transform: scale(1.02); }
+}
+
+.redeemRevealHero{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width:520px){
+  .redeemRevealHero{ grid-template-columns: 1fr; }
+}
+
+.redeemCardFrame{
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  overflow:hidden;
+  box-shadow: 0 18px 60px rgba(0,0,0,.60);
+  transform: translateY(8px) scale(.98);
+  animation: redeemPopIn .22s ease forwards;
+}
+
+@keyframes redeemPopIn{
+  to{ transform: translateY(0) scale(1); }
+}
+
+.redeemCardFrame img{
+  width:100%;
+  height: 250px;
+  object-fit: cover;
+  display:block;
+}
+
+.redeemShine{
+  position:absolute;
+  inset:-40% -60%;
+  background: linear-gradient(120deg,
+    rgba(255,255,255,0),
+    rgba(255,255,255,.28),
+    rgba(255,255,255,0)
+  );
+  transform: rotate(18deg) translateX(-40%);
+  opacity: 0;
+  animation: redeemShine 1.05s ease forwards;
+  pointer-events:none;
+}
+
+@keyframes redeemShine{
+  0%{ opacity:0; transform: rotate(18deg) translateX(-55%); }
+  15%{ opacity:1; }
+  100%{ opacity:0; transform: rotate(18deg) translateX(60%); }
+}
+
+.redeemRevealInfo{ display:flex; flex-direction:column; gap:10px; }
+.redeemRevealName{ font-size: 20px; font-weight: 1000; letter-spacing:.2px; }
+.redeemRevealStats{ color: rgba(233,238,255,.82); font-weight: 900; }
+
+.redeemRevealAbility{
+  padding: 10px 12px;
+  border-radius: 16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.20);
+}
+
+.redeemRevealAbilityName{ font-weight: 1000; }
+.redeemRevealAbilityDesc{ margin-top:6px; color: var(--muted); line-height:1.45; }
+
+.redeemCodeLine{
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(233,238,255,.75);
+}
+
+/* sparkle particles */
+.redeemSpark{
+  position:absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%,
+    rgba(255,255,255,1),
+    rgba(170,240,255,.85),
+    rgba(255,155,255,0)
+  );
+  opacity: 0;
+  pointer-events:none;
+  animation: redeemSpark 1s ease forwards;
+}
+
+@keyframes redeemSpark{
+  0%{ transform: translate(0,0) scale(.8); opacity: 0; }
+  10%{ opacity: 1; }
+  100%{ transform: translate(var(--dx), var(--dy)) scale(.0); opacity: 0; }
+}
+
+
+/* =========================
+   🎰 Lucky Draw tweaks (modal + wheel)
+   ========================= */
+
+.luckyWheelCard{
+  width: 86px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  transform: rotate(-3deg);
+}
+
+/* Use the existing #luckyMultiStrip as a 5x results grid */
+.luckyMultiStrip{
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.luckyMultiCard{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.luckyMultiCard::after{
+  content:"";
+  position:absolute;
+  inset:-60px;
+  background: radial-gradient(closest-side, rgba(79,140,255,.22), transparent 70%);
+  filter: blur(12px);
+  opacity: .35;
+}
+
+.luckyMultiCard.legendary{
+  border-color: rgba(255,210,125,.40);
+  box-shadow: 0 0 0 2px rgba(255,210,125,.12) inset, 0 18px 60px rgba(255,210,125,.10);
+}
+
+.luckyMultiTop{
+  position: relative;
+  z-index: 2;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.luckyMultiIcon{
+  font-size: 22px;
+  font-weight: 1000;
+}
+
+.luckyMultiRarity{
+  font-size: 12px;
+  letter-spacing: .3px;
+}
+
+.luckyMultiImg{
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  margin: 2px 0 10px;
+}
+
+.luckyMultiTitle{
+  position: relative;
+  z-index: 2;
+  font-weight: 1000;
+  color: rgba(233,238,255,.92);
+}
+
+.luckyMultiDesc{
+  position: relative;
+  z-index: 2;
+  margin-top: 6px;
+}
+
+
+/* =========================
+   📖 How To Play (Tutorial)
+   ========================= */
+.tutorialSteps{
+  display:grid;
+  gap:12px;
+  margin-top: 10px;
+}
+
+.tutorialStep{
+  padding:12px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+}
+
+.tutorialStep h4{
+  margin:0 0 6px;
+  font-size:14px;
+  font-weight:900;
+}
+
+.tutorialStep p{
+  margin:0;
+  color: rgba(233,238,255,.78);
+  line-height:1.45;
+}
+
+.tutorialNav{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:14px;
+}
+
+.tutorialNav button{
+  flex:1;
+}
+
+/* =========================
+   🔥 CARD UPGRADE BUTTON FX
+   ========================= */
+.btnUpgrade{
+  position:relative;
+  overflow:hidden;
+  border:1px solid rgba(255,210,125,.20);
+  background: linear-gradient(135deg,
+    rgba(255,210,125,.22),
+    rgba(124,92,255,.20),
+    rgba(79,140,255,.20)
+  );
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.06) inset,
+    0 12px 30px rgba(0,0,0,.35);
+}
+
+.btnUpgrade::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0),
+    rgba(255,255,255,.18),
+    rgba(255,255,255,0)
+  );
+  transform: translateX(-120%);
+  transition: transform .55s ease;
+}
+
+.btnUpgrade:hover::before{
+  transform: translateX(120%);
+}
+
+.upgradeBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.25);
+  font-size:12px;
+  font-weight:1000;
+  color: rgba(233,238,255,.88);
+}
+
+.upgradeStars{
+  letter-spacing: 1px;
+  color: rgba(255,210,125,.95);
+  text-shadow: 0 0 16px rgba(255,210,125,.22);
+}
+
+
+/* ===== COSMO OMEN MODAL (Ray Bill reveal) ===== */
+.omenCardWrap{
+  margin-top: 12px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.omenCardImg{
+  width:100%;
+  height:240px;
+  object-fit:contain;
+  background: rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius: 16px;
+  padding:10px;
+}
+.omenLore{
+  margin-top:10px;
+  font-weight:700;
+  color: rgba(233,238,255,.80);
+  line-height:1.5;
+  white-space: pre-wrap;
+}
+
+
+/* ===== COSMO OMEN MODAL sizing fix (so buttons are always visible) ===== */
+.omenModalBox{
+  width: min(560px, 100%);
+  max-height: 86vh;          /* keep inside viewport */
+  overflow: hidden;          /* body will scroll */
+  display:flex;
+  flex-direction:column;
+}
+
+.omenModalBox .modalBody{
+  overflow:auto;
+  padding-bottom: 8px;
+}
+
+/* Sticky actions so Continue/Prepare stays reachable */
+.omenActions{
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(10,14,28,.35), rgba(10,14,28,.92));
+  border-top: 1px solid rgba(255,255,255,.10);
+  backdrop-filter: blur(10px);
+}
+
+/* make omen art smaller on short screens */
+@media (max-height: 760px){
+  .omenCardImg{ height: 200px; }
+}
+@media (max-height: 680px){
+  .omenCardImg{ height: 160px; }
+}
