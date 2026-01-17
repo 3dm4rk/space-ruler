@@ -5,6 +5,93 @@
 
 const GAME_VERSION = "single-relic-equip-v4";
 console.log("Loaded game.js", GAME_VERSION);
+
+// Unique id for each spawned card instance (prevents double on-death triggers)
+let __CARD_UID = 1;
+
+// =========================
+// PROFILE / RANKS (save on device)
+// =========================
+const PROFILE_KEY = "cb_profile_v1";
+
+// Rank ladder (XP thresholds are inclusive minimums)
+const RANKS = [
+  { name: "Rookie",   xp: 0 },
+  { name: "Bronze",   xp: 100 },
+  { name: "Silver",   xp: 600 },
+  { name: "Gold",     xp: 1000 },
+  { name: "Platinum", xp: 2000 },
+  { name: "Diamond",  xp: 3500 },
+  { name: "Master",   xp: 6000 },
+  // NOTE: Legend is intentionally a big milestone.
+  { name: "Legend",   xp: 11000 },
+];
+
+// Avatar + Frame cosmetics unlocked by rank
+const AVATARS = [
+  { id: "spark",   icon: "✨", unlockRank: "Rookie" },
+  { id: "flame",   icon: "🔥", unlockRank: "Bronze" },
+  { id: "snow",    icon: "❄️", unlockRank: "Silver" },
+  { id: "storm",   icon: "⚡", unlockRank: "Gold" },
+  { id: "leaf",    icon: "🍃", unlockRank: "Platinum" },
+  { id: "skull",   icon: "💀", unlockRank: "Diamond" },
+  { id: "crown",   icon: "👑", unlockRank: "Master" },
+  { id: "legend",  icon: "🌟", unlockRank: "Legend" },
+];
+
+const FRAMES = [
+  { id: "default",  label: "Default",  className: "",             unlockRank: "Rookie" },
+  { id: "bronze",   label: "Bronze",   className: "frameBronze",  unlockRank: "Bronze" },
+  { id: "silver",   label: "Silver",   className: "frameSilver",  unlockRank: "Silver" },
+  { id: "gold",     label: "Gold",     className: "frameGold",    unlockRank: "Gold" },
+  { id: "platinum", label: "Platinum", className: "framePlatinum",unlockRank: "Platinum" },
+  { id: "diamond",  label: "Diamond",  className: "frameDiamond", unlockRank: "Diamond" },
+  { id: "master",   label: "Master",   className: "frameMaster",  unlockRank: "Master" },
+  { id: "legend",   label: "Legend",   className: "frameLegend",  unlockRank: "Legend" },
+];
+
+function rankIndexByName(name) {
+  const n = String(name || "").toLowerCase();
+  const i = RANKS.findIndex(r => r.name.toLowerCase() === n);
+  return i >= 0 ? i : 0;
+}
+
+function getRankIndexForXp(xp) {
+  const x = Number(xp || 0) || 0;
+  let idx = 0;
+  for (let i = 0; i < RANKS.length; i++) {
+    if (x >= RANKS[i].xp) idx = i;
+  }
+  return idx;
+}
+
+function getRankName() {
+  return RANKS[Math.max(0, Math.min(RANKS.length - 1, Number(state.profileRankIndex || 0) || 0))].name;
+}
+
+function nextRankInfo() {
+  const i = Number(state.profileRankIndex || 0) || 0;
+  if (i >= RANKS.length - 1) return null;
+  return RANKS[i + 1];
+}
+
+function ensureProfileDefaults() {
+  if (!state.profile) state.profile = {};
+  const p = state.profile;
+  if (typeof p.name !== "string") p.name = "";
+  if (!Number.isFinite(Number(p.xp))) p.xp = 0;
+  if (!Number.isFinite(Number(p.wins))) p.wins = 0;
+  if (!Number.isFinite(Number(p.losses))) p.losses = 0;
+  if (!Number.isFinite(Number(p.highStage))) p.highStage = 0;
+  if (typeof p.avatarId !== "string") p.avatarId = "spark";
+  if (typeof p.frameId !== "string") p.frameId = "default";
+  if (p.diabloUnlocked !== true) p.diabloUnlocked = false;
+  // Mirror into top-level cached fields used by UI helpers
+  state.profileXp = p.xp;
+  state.profileRankIndex = getRankIndexForXp(p.xp);
+  state.profileName = p.name;
+}
+
 // =========================
 // HELPERS (Shield / Armor rules)
 // =========================
@@ -17,6 +104,8 @@ function gainShield(f, amount) {
   const cap = getShieldCap();
   const before = f.shield;
   f.shield = Math.min(cap, f.shield + amount);
+  // ✅ Keep DEF and Shield the same (requested). DEF is treated as the live defense value.
+  f.def = f.shield;
   return f.shield - before;
 }
 
@@ -92,27 +181,49 @@ function tryYrolPassive(defender, opts) {
 
 
 // =========================
-// 🎰 LUCKY LEGENDARY PASSIVE: Relicborn Titan
-// On defeating an enemy with a normal ATTACK, doubles ATK/DEF/MaxHP and doubles current HP (capped).
+// 🎰 LUCKY LEGENDARY PASSIVE: Entity
+// On defeating an enemy with an ABILITY (skill), permanently gain +6 ATK, +5 Armor, +5 Max HP (+5 heal, capped). (CD 3)
 // =========================
 function triggerRelicbornTitanOnKill(attacker, defender, opts) {
+  // Passive: when an enemy dies (killed by Entity), permanently gain stats.
+  // Cooldown: once every 3 turns.
   if (!attacker || attacker.id !== "relicbornTitan") return;
   if (!defender || Number(defender.hp) > 0) return;
-  const source = String(opts?.source || "attack").toLowerCase();
-  if (source !== "attack") return;
 
-  attacker.atk = Math.max(0, Number(attacker.atk || 0)) * 2;
-  attacker.def = Math.max(0, Number(attacker.def || 0)) * 2;
+  // ✅ IMPORTANT: Only trigger on ABILITY (skill) kills.
+  // Normal attacks should NEVER grant stat gains (fixes occasional double-stat bug on attack kills).
+  const src = String((opts && opts.source) || "attack").toLowerCase();
+  if (src !== "skill") return;
 
-  const oldHp = Math.max(0, Number(attacker.hp || 0));
-  attacker.maxHp = Math.max(1, Number(attacker.maxHp || 1)) * 2;
-  attacker.hp = Math.min(attacker.maxHp, oldHp * 2);
+  // Require an explicit attacker so poison/ambient damage doesn't grant buffs.
+  if (opts && opts.attacker && opts.attacker !== attacker) return;
 
-  // Shield is still capped by shield cap, but we double what you currently have
-  attacker.shield = Math.min(getShieldCap(), Math.max(0, Number(attacker.shield || 0)) * 2);
+  // ✅ Prevent double-buffing the same kill (some flows can touch death twice)
+  const killUid = Number(defender.uid || 0) || 0;
+  if (defender._titanKillProcessed === true) return;
+  if (killUid && attacker._titanLastKillUid === killUid) return;
+  defender._titanKillProcessed = true;
+  if (killUid) attacker._titanLastKillUid = killUid;
 
-  log(`🌟 ${attacker.name} grows stronger! (On Kill) → Stats doubled.`, "good");
-  floatingDamage(attacker === state.player ? "player" : "enemy", "🌟 x2", "good");
+  attacker.titanKillCd = Number(attacker.titanKillCd || 0) || 0;
+  if (attacker.titanKillCd > 0) return;
+
+  // Permanent stat growth
+  attacker.atk = Math.max(0, Number(attacker.atk || 0)) + 6;
+  attacker.def = Math.max(0, Number(attacker.def || 0)) + 5;
+
+  // Health: increase max HP and heal +5 (capped)
+  attacker.maxHp = Math.max(1, Number(attacker.maxHp || 1)) + 5;
+  attacker.hp = Math.min(attacker.maxHp, Math.max(0, Number(attacker.hp || 0)) + 5);
+
+  // Armor: also grant +5 current armor (shield), respecting cap
+  attacker.shield = Math.min(getShieldCap(), Math.max(0, Number(attacker.shield || 0)) + 5);
+
+  attacker.titanKillCd = 3;
+
+  log(`🌟 ${attacker.name} absorbs the fallen! +6 DMG • +5 Armor • +5 Life. (CD 3)`, "good");
+  floatingDamage(attacker === state.player ? "player" : "enemy", "+STATS", "good");
+  updateUI();
 }
 // =========================
 // BASE PLAYABLE CARDS
@@ -143,7 +254,7 @@ const BASE_CARDS = [
       // Heal +3 HP
       const healed = canHeal(me) ? (me.hp = Math.min(me.maxHp, me.hp + 3), 3) : 0;
 
-      me.cooldown = 2;
+      me.cooldown = 3;
 
       const healNote = canHeal(me) ? `+3 HP` : `healing blocked`;
       return { ok: true, msg: `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, ${healNote}.` };
@@ -161,7 +272,7 @@ const BASE_CARDS = [
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       foe.stunned = 1;
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Arrest Beam! Enemy is stunned.` };
     }
   },
@@ -180,7 +291,7 @@ const BASE_CARDS = [
 
       me.hp = Math.min(me.maxHp, me.hp + 2);
       const gained = gainShield(me, 1);
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Lucky Charm! +2 HP, +${gained} Armor.` };
     }
   },
@@ -218,7 +329,7 @@ const BASE_CARDS = [
     skill: (me) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       me.boost = 1;
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Rocket Rush! Next attack +3 dmg.` };
     }
   },
@@ -235,7 +346,7 @@ const BASE_CARDS = [
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       applyDamage(foe, 1, { silent: true, source: "skill", });
       applyDamage(foe, 1, { silent: true, source: "skill", });
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Dual Slash! 2 hits.` };
     }
   },
@@ -254,12 +365,12 @@ const BASE_CARDS = [
       if (foe.shield > 0) {
         foe.shield = Math.max(0, foe.shield - 1);
         const gained = gainShield(me, 1);
-        me.cooldown = 2;
+        me.cooldown = 3;
         updateUI();
         return { ok: true, msg: `${me.name} steals 1 Armor! (+${gained} to you)` };
       }
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} tried to steal Armor... but enemy has none!` };
     }
   },
@@ -287,7 +398,7 @@ const BASE_CARDS = [
       applyDamage(foe, 9, { silent: true, source: "skill" });
     }
 
-    me.cooldown = 2;
+    me.cooldown = 3;
 
     return {
       ok: true,
@@ -309,7 +420,7 @@ const BASE_CARDS = [
     skill: (me) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       const gained = gainShield(me, 2);
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Divine Guard! +${gained} Armor.` };
     }
   },
@@ -326,7 +437,7 @@ const BASE_CARDS = [
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       applyDamage(foe, 2, { silent: true, source: "skill", });
       foe.stunned = 1;
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} casts Void Burst! 2 dmg + Stun.` };
     }
   }
@@ -369,7 +480,7 @@ const UNLOCKABLE_CARD_DEFS = {
       const gained = gainShield(me, 2);
       const healBlocked = !canHeal(me);
       if (!healBlocked) me.hp = Math.min(me.maxHp, me.hp + 3);
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: healBlocked ? `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, healing blocked.` : `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, +3 HP.` };
     }
   },
@@ -388,7 +499,7 @@ const UNLOCKABLE_CARD_DEFS = {
       if (!healBlocked) me.hp = Math.min(me.maxHp, me.hp + 4);
       const gained = gainShield(me, 6);
       if (foe && Number(foe.hp) > 0) applyDamage(foe, 9, { silent: true, source: "skill" });
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: healBlocked ? `${me.name} rewinds time! Healing was blocked, +${gained} Armor, and deals 9 damage.` : `${me.name} rewinds time! +4 HP, +${gained} Armor, and deals 9 damage.` };
     }
   },
@@ -405,7 +516,7 @@ const UNLOCKABLE_CARD_DEFS = {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       applyDamage(foe, 2, { silent: true, source: "skill", });
       applyDamage(foe, 2, { silent: true, source: "skill", });
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Ricochet Shot! 2 hits.` };
     }
   },
@@ -429,7 +540,7 @@ const UNLOCKABLE_CARD_DEFS = {
       me.hp = Math.min(me.maxHp, me.hp + healAmt);
       const gained = gainShield(me, 3);
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Radiant Blessing! +${healAmt} HP, +${gained} Armor.` };
     }
   },
@@ -460,11 +571,11 @@ const UNLOCKABLE_CARD_DEFS = {
       // Bonus if enemy armor becomes 0
       if (foe.hp > 0 && foe.shield === 0) {
         applyDamage(foe, 4, { silent: true, source: "skill", });
-        me.cooldown = 2;
+        me.cooldown = 3;
         return { ok: true, msg: `${me.name} uses Starstep Combo! Healed 5, +${gained} Armor, 3 hits + bonus strike!` };
       }
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       return { ok: true, msg: `${me.name} uses Starstep Combo! Healed 5, +${gained} Armor, 3 hits.` };
     }
   },
@@ -499,7 +610,7 @@ const UNLOCKABLE_CARD_DEFS = {
       // Time Lock (2 turns)
       foe.noArmorGain = Math.max(foe.noArmorGain || 0, 2);
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       updateUI();
       return { ok: true, msg: `${me.name} collapses time! 6 dmg, healed ${healed}, removed ${removed} armor, Time Lock (2 turns).` };
     }
@@ -567,7 +678,7 @@ voidSamurai: {
     if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
     const gained = gainShield(me, 4);
     applyDamage(foe, 6, { silent: true, source: "skill", attackerName: me.name, damageType: "physical" });
-    me.cooldown = 2;
+    me.cooldown = 3;
     updateUI();
     return { ok: true, msg: `${me.name} uses Void Counter! +${gained} armor, 6 damage.` };
   }
@@ -655,13 +766,13 @@ astroWitch: {
   // 🎰 Lucky Draw Legendary
   relicbornTitan: {
     id: "relicbornTitan",
-    name: "Relicborn Titan",
+    name: "Entity",
     img: "cards/entity.png",
     atk: 6,
     def: 5,
     hp: 5,
     skillName: "Armor Break Roulette",
-    skillDesc: "Remove ALL enemy armor, then 50% chance to deal 25 damage, otherwise 5 damage. (CD 2)",
+    skillDesc: "Remove ALL enemy armor, then 50% chance to deal 25 damage, otherwise 5 damage. (CD 3) Passive: On ability kill, permanently gain +6 DMG, +5 Armor, +5 Life (CD 3).",
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
@@ -670,9 +781,9 @@ astroWitch: {
 
       const big = Math.random() < 0.5;
       const dmg = big ? 25 : 5;
-      applyDamage(foe, dmg, { silent: true, source: "skill", attackerName: me.name });
+      applyDamage(foe, dmg, { silent: true, source: "skill", attacker: me, attackerName: me.name });
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       updateUI();
       return { ok: true, msg: `${me.name} shatters armor (-${removed}) and rolls ${big ? "CRITICAL" : "Normal"}! ${dmg} damage.` };
     }
@@ -723,7 +834,7 @@ astroWitch: {
       foe.poisonPct = 0;
       foe.poisonFlat = 5;
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       updateUI();
       return { ok: true, msg: `${me.name} uses Enhancer! Enemy will take 5 poison damage every round until they die.` };
     }
@@ -746,7 +857,7 @@ astroWitch: {
 
       applyDamage(foe, dmg, { silent: true, source: "skill" });
 
-      me.cooldown = 2;
+      me.cooldown = 3;
       updateUI();
       return { ok: true, msg: `${me.name} fires Sausage Beam! ${big ? "CRITICAL" : "Normal"} blast for ${dmg} damage.` };
     }
@@ -798,6 +909,28 @@ astroWitch: {
       if (canHeal(me)) me.hp = Math.min(me.maxHp, me.hp + 5);
       me.cooldown = 3;
       return { ok: true, msg: me.name + " reveals Cosmo's secret! 10 dmg, +" + gained + " Armor, healed 5." };
+    }
+  },
+
+  // 🔥 LEGEND REWARD (not buyable) — unlocked automatically upon reaching Rank: Legend
+  diablo: {
+    id: "diablo",
+    name: "Diablo",
+    img: "cards/diablo.png",
+    atk: 2,
+    def: 5,
+    hp: 8,
+    secret: true,
+    skillName: "Hellfire Ascension",
+    skillDesc: "Deal 12 damage, gain +4 Armor, and heal +7 HP. (CD 3)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+      applyDamage(foe, 12, { silent: true, source: "skill" });
+      const gained = gainShield(me, 4);
+      const healBlocked = !canHeal(me);
+      if (!healBlocked) me.hp = Math.min(me.maxHp, me.hp + 7);
+      me.cooldown = 3;
+      return { ok: true, msg: healBlocked ? `${me.name} unleashes Hellfire! 12 dmg, +${gained} Armor, healing blocked.` : `${me.name} unleashes Hellfire! 12 dmg, +${gained} Armor, +7 HP.` };
     }
   },
 };
@@ -954,7 +1087,8 @@ const CARD_LORE = {
   "yrol": "A legendary overclocker who evolves under pressure—each ability strike can awaken a new form.",
   "abarskie": "A choir of null-sound given shape; its hymn silences powers and turns enemies’ strength against them.",
 
-  "relicbornTitan": "A titan forged from broken relics—he spins fate like a roulette wheel and calls it justice.",
+  "relicbornTitan": "An Entity forged from broken relics—it spins fate like a roulette wheel and calls it justice.",
+  "diablo": "Born in the Furnace Below, Diablo devours fallen souls to stoke his infernal core. Each victory feeds the flames—each defeat leaves only ash and a whisper that he will return.",
   "drNemesis": "A ruthless scientist who treats battle like an equation—poison and debuffs, repeated until solved.",
   "hollyChild": "A fragile miracle with a toxic gift—her blessing is poison that never stops.",
   "ohtensahorse": "A prankster beast of the outer rim—its beam is either a joke… or a catastrophe.",
@@ -991,7 +1125,7 @@ const LUCKY_DRAW = {
   singleCost: 2000,
   fiveCost: 10000,
   // ✅ Requested: Lucky Draw rewards
-  // - 1% chance: Card (Relicborn Titan)
+  // - 1% chance: Card (Entity)
   // - 99% chance: Gold (random 1–100)
   legendaryChance: 0.01,
   cardChance: 0.00,
@@ -1015,8 +1149,9 @@ const STREAK_KEY = "cb_win_streak_v2";
 // --- Card Upgrades ---
 const CARD_UPGRADES_KEY = "cb_card_upgrades_v1";
 
-// --- Profile / Rank ---
-const PROFILE_KEY = "cb_profile_v1";
+// --- Redeem Codes ---
+// Stores a map of redeemed codes so the same code can't be claimed twice.
+const REDEEMED_CODES_KEY = "cb_redeemed_codes_v1";
 
 
 
@@ -1035,97 +1170,14 @@ const state = {
   winStreak: 0,
   bestStreak: 0,
   cardUpgrades: {},
-  profile: { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 },
   player: null,
   enemy: null,
   // Last damage/ability line that affected the PLAYER (shown on defeat)
   lastHitSummary: "",
-  lastAction: "",
-  // Phoenix Ember / revive flow helper:
-  // set true when the player revives so we can cancel any remaining follow-up damage in the same turn
-  justRevived: false
+  lastAction: ""
 };
 
 const $ = (id) => document.getElementById(id);
-
-// =========================
-// 👤 PROFILE + RANK SYSTEM
-// =========================
-
-const RANKS = [
-  { name: "Rookie", xp: 0 },
-  { name: "Bronze", xp: 300 },
-  { name: "Silver", xp: 900 },
-  { name: "Gold", xp: 1800 },
-  { name: "Platinum", xp: 3200 },
-  { name: "Diamond", xp: 5200 },
-  { name: "Master", xp: 7800 },
-  { name: "Legend", xp: 11000 }
-];
-
-function clamp(n, a, b){ n = Number(n||0); return Math.max(a, Math.min(b, n)); }
-
-function getRankForXp(xp){
-  const x = Math.max(0, Number(xp || 0));
-  let idx = 0;
-  for (let i = 0; i < RANKS.length; i++) if (x >= RANKS[i].xp) idx = i;
-  const cur = RANKS[idx];
-  const next = RANKS[idx + 1] || null;
-  return { idx, cur, next };
-}
-
-function addXp(amount, reason){
-  const prof = state.profile || (state.profile = { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 });
-  const before = getRankForXp(prof.xp);
-  prof.xp = Math.max(0, Number(prof.xp || 0) + Math.max(0, Number(amount || 0)));
-  const after = getRankForXp(prof.xp);
-
-  // Rank up toast
-  if (after.idx > before.idx) {
-    showToast(`🏅 Rank Up! ${before.cur.name} → ${after.cur.name}`);
-  } else {
-    // small xp toast for feedback
-    if (amount > 0) showToast(`+${amount} XP${reason ? ` (${reason})` : ""}`);
-  }
-
-  saveProgress();
-  updateProfileUI();
-}
-
-function updateProfileUI(){
-  const prof = state.profile || { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 };
-  const r = getRankForXp(prof.xp);
-
-  if ($("profileRankPill")) $("profileRankPill").textContent = `Rank: ${r.cur.name}`;
-  if ($("profileXpPill")) $("profileXpPill").textContent = `XP: ${Math.max(0, Number(prof.xp||0))}`;
-  if ($("rankBadge")) $("rankBadge").textContent = r.cur.name;
-  if ($("profileNameInput") && document.activeElement !== $("profileNameInput")) $("profileNameInput").value = prof.name || "Player";
-
-  if ($("statWins")) $("statWins").textContent = String(Number(prof.wins || 0));
-  if ($("statLosses")) $("statLosses").textContent = String(Number(prof.losses || 0));
-  if ($("statBestStreak")) $("statBestStreak").textContent = String(Number(state.bestStreak || 0));
-  if ($("statHighStage")) $("statHighStage").textContent = String(Number(prof.highStage || 0));
-
-  const relicName = (state.equippedRelicId && (RELICS || []).find((x) => x.id === state.equippedRelicId)?.name) || "None";
-  if ($("profileRelic")) $("profileRelic").textContent = relicName;
-
-  if (r.next) {
-    const curFloor = r.cur.xp;
-    const nextFloor = r.next.xp;
-    const within = clamp((Number(prof.xp||0) - curFloor) / Math.max(1, (nextFloor - curFloor)), 0, 1);
-    if ($("rankProgressLabel")) $("rankProgressLabel").textContent = `Next rank: ${r.next.name}`;
-    if ($("rankProgressNums")) $("rankProgressNums").textContent = `${Math.max(0, Number(prof.xp||0))} / ${nextFloor}`;
-    if ($("rankBarFill")) $("rankBarFill").style.width = `${Math.round(within * 100)}%`;
-  } else {
-    if ($("rankProgressLabel")) $("rankProgressLabel").textContent = `Max rank reached`; 
-    if ($("rankProgressNums")) $("rankProgressNums").textContent = `${Math.max(0, Number(prof.xp||0))}`;
-    if ($("rankBarFill")) $("rankBarFill").style.width = `100%`;
-  }
-}
-
-function renderProfile(){
-  updateProfileUI();
-}
 
 // =========================
 // IMAGE FALLBACKS
@@ -1497,7 +1549,175 @@ function renderShop() {
 
 // Keep Redeem Code button from crashing if this feature isn't wired yet.
 function redeemCodeFlow() {
-  alert("Redeem Code is coming soon ✨");
+  // Offline redeem system (local-only).
+  // Add/modify codes here:
+  const REDEEM_CODES = {
+    // Redeem legendaries (examples)
+    "YROL": { type: "card", id: "yrol" },
+    "ABARSKIE": { type: "card", id: "abarskie" },
+
+    // ✅ Alias codes (requested)
+    "IAMYROL": { type: "card", id: "yrol" },
+    "IAMABARCA": { type: "card", id: "abarskie" },
+  };
+
+  const raw = prompt("Enter redeem code:")
+  if (raw == null) return; // cancelled
+  const code = String(raw || "").trim();
+  if (!code) {
+    alert("Please enter a code.");
+    return;
+  }
+
+  // Normalize: remove spaces and hyphens, uppercase.
+  const norm = code.toUpperCase().replace(/[\s-]+/g, "");
+
+  // Load redeemed map
+  let redeemed = {};
+  try { redeemed = JSON.parse(localStorage.getItem(REDEEMED_CODES_KEY) || "{}") || {}; }
+  catch { redeemed = {}; }
+
+  if (redeemed[norm]) {
+    // Show premium reveal again (feels good), but do not re-grant.
+    const prev = redeemed[norm] || {};
+    if (prev.type === "card" && prev.id && UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS[prev.id]) {
+      showRedeemRevealModal(prev.id, norm, true);
+      return;
+    }
+    alert("Code already redeemed ✅");
+    return;
+  }
+
+  // Allow both exact keys AND normalized keys in REDEEM_CODES
+  const direct = REDEEM_CODES[code.toUpperCase()] || REDEEM_CODES[norm];
+
+  // Extra fallback: if the player enters a card id directly (case-insensitive), accept it.
+  // Example: "yrol" or "ABARSKIE".
+  const asId = String(norm || "").toLowerCase();
+  const idFallback = (UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS[asId]) ? { type: "card", id: asId } : null;
+
+  const reward = direct || idFallback || null;
+
+  if (!reward) {
+    alert("Invalid code ❌");
+    return;
+  }
+
+  if (reward.type === "card") {
+    const cardId = reward.id;
+    if (!cardId || !UNLOCKABLE_CARD_DEFS || !UNLOCKABLE_CARD_DEFS[cardId]) {
+      alert("This code reward is not configured correctly.");
+      return;
+    }
+
+    if (state.owned && state.owned[cardId]) {
+      // If the player already owns it, still mark the code as redeemed (prevents repeats)
+      redeemed[norm] = { type: "card", id: cardId, at: Date.now(), alreadyOwned: true };
+      localStorage.setItem(REDEEMED_CODES_KEY, JSON.stringify(redeemed));
+      // Show premium modal instead of only alert
+      showRedeemRevealModal(cardId, norm, true);
+      return;
+    }
+
+    state.owned[cardId] = true;
+    redeemed[norm] = { type: "card", id: cardId, at: Date.now() };
+    localStorage.setItem(REDEEMED_CODES_KEY, JSON.stringify(redeemed));
+
+    saveProgress();
+
+    // Refresh UI wherever the user is
+    if (typeof renderPick === "function") renderPick();
+    if (typeof renderGallery === "function") renderGallery();
+    if (typeof renderShopCards === "function") renderShopCards();
+    if (typeof updateGoldUI === "function") updateGoldUI();
+
+    const nm = UNLOCKABLE_CARD_DEFS[cardId].name;
+    // Premium modal reveal (image + ability + cool FX)
+    showRedeemRevealModal(cardId, norm, false);
+    return;
+  }
+
+  alert("Unknown reward type.");
+}
+
+// =========================
+// 🎁 REDEEM REVEAL MODAL (cool FX + claim button)
+// =========================
+function closeRedeemRevealModal() {
+  const modal = document.getElementById("redeemRevealModal");
+  if (modal) modal.style.display = "none";
+}
+
+function showRedeemRevealModal(cardId, code, alreadyOwned) {
+  const modal = document.getElementById("redeemRevealModal");
+  const def = (UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS[cardId]) ? UNLOCKABLE_CARD_DEFS[cardId] : null;
+
+  // If modal isn't present yet, keep old behavior as fallback
+  if (!modal || !def) {
+    const nm = def?.name || cardId;
+    alert(alreadyOwned ? `You already own ${nm} ✅` : `Redeemed ✅\nUnlocked: ${nm}\n\nGo to Battle/Setup to pick it!`);
+    return;
+  }
+
+  const title = document.getElementById("redeemRevealTitle");
+  const pill = document.getElementById("redeemRevealPill");
+  const text = document.getElementById("redeemRevealText");
+  const img = document.getElementById("redeemRevealImg");
+  const name = document.getElementById("redeemRevealName");
+  const stats = document.getElementById("redeemRevealStats");
+  const abName = document.getElementById("redeemRevealAbilityName");
+  const abDesc = document.getElementById("redeemRevealAbilityDesc");
+  const codeLine = document.getElementById("redeemRevealCodeLine");
+
+  if (title) title.textContent = alreadyOwned ? "✅ Code Redeemed (Already Owned)" : "🎁 Code Redeemed!";
+  if (pill) pill.textContent = (def.legendaryPassive || def.legendaryCooldownMs) ? "Legendary" : "Unlocked";
+  if (text) text.textContent = alreadyOwned
+    ? "You already owned this card — but the code is now claimed on this device ✅"
+    : "New card unlocked! Go to Setup to use it.";
+
+  if (img) {
+    img.src = def.img || "";
+    img.alt = def.name || "Card";
+    img.onerror = () => { img.onerror = null; img.src = window.__cardPlaceholder(def.name || "Card"); };
+  }
+  if (name) name.textContent = def.name || "Unlocked Card";
+  if (stats) stats.textContent = `ATK ${def.atk} • DEF ${def.def} • HP ${def.hp}`;
+  if (abName) abName.textContent = def.skillName || "Ability";
+  if (abDesc) abDesc.textContent = def.skillDesc || "";
+  if (codeLine) codeLine.textContent = `Code: ${String(code || "").toUpperCase()}`;
+
+  // Show modal
+  modal.style.display = "flex";
+
+  // SFX + sparks
+  if (typeof playSfx === "function") playSfx("sfxJackpot", 0.7);
+  const box = modal.querySelector(".redeemRevealBox") || modal.querySelector(".modalBox");
+  if (box) spawnRedeemSparks(box, 18);
+}
+
+function spawnRedeemSparks(rootEl, count) {
+  if (!rootEl) return;
+  rootEl.querySelectorAll(".redeemSpark").forEach(n => n.remove());
+
+  const c = Math.max(8, Math.min(26, Number(count || 18) || 18));
+  for (let i = 0; i < c; i++) {
+    const s = document.createElement("div");
+    s.className = "redeemSpark";
+
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 140 + Math.random() * 170;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+
+    s.style.setProperty("--dx", `${dx.toFixed(1)}px`);
+    s.style.setProperty("--dy", `${dy.toFixed(1)}px`);
+    s.style.left = `${50 + (Math.random() * 10 - 5)}%`;
+    s.style.top  = `${40 + (Math.random() * 10 - 5)}%`;
+    s.style.animationDelay = `${(Math.random() * 90) | 0}ms`;
+
+    rootEl.appendChild(s);
+    setTimeout(() => s.remove(), 1100);
+  }
 }
 
 // =========================
@@ -1616,20 +1836,33 @@ function loadProgress() {
     state.cardUpgrades = {};
   }
 
-  // ---- Profile / Rank ----
+  // ---- Profile / Rank / Cosmetics ----
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     const p = raw ? (JSON.parse(raw) || {}) : {};
-    state.profile = {
-      name: String(p.name || "Player").slice(0, 18),
-      xp: Math.max(0, Number(p.xp || 0) || 0),
-      wins: Math.max(0, Number(p.wins || 0) || 0),
-      losses: Math.max(0, Number(p.losses || 0) || 0),
-      highStage: Math.max(0, Number(p.highStage || 0) || 0)
-    };
+    state.profileName = String(p.profileName || p.name || "").slice(0, 18);
+    state.profileXp = Math.max(0, Number(p.profileXp ?? p.xp ?? 0) || 0);
+    state.profileWins = Math.max(0, Number(p.profileWins ?? p.wins ?? 0) || 0);
+    state.profileLosses = Math.max(0, Number(p.profileLosses ?? p.losses ?? 0) || 0);
+    state.highStage = Math.max(0, Number(p.highStage ?? 0) || 0);
+    state.avatarId = String(p.avatarId || "spark");
+    state.frameId = String(p.frameId || "default");
+    state.diabloUnlocked = !!p.diabloUnlocked;
+    state.diabloClaimed = !!p.diabloClaimed;
   } catch {
-    state.profile = { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 };
+    state.profileName = "";
+    state.profileXp = 0;
+    state.profileWins = 0;
+    state.profileLosses = 0;
+    state.highStage = 0;
+    state.avatarId = "spark";
+    state.frameId = "default";
+    state.diabloUnlocked = false;
+    state.diabloClaimed = false;
   }
+
+  // Backfill legacy bestStreak into profile stats
+  if (!Number.isFinite(Number(state.bestStreak))) state.bestStreak = 0;
 }
 
 
@@ -1642,7 +1875,328 @@ function saveProgress() {
   localStorage.setItem(STREAK_KEY, JSON.stringify({ winStreak: Number(state.winStreak || 0), bestStreak: Number(state.bestStreak || 0) }));
   localStorage.setItem(CARD_UPGRADES_KEY, JSON.stringify(state.cardUpgrades || {}));
 localStorage.setItem(LUCKY_ENTITY_OWNED_KEY, state.luckyEntityOwned ? "1" : "0");
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(state.profile || { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 }));
+
+  // Profile
+  localStorage.setItem(PROFILE_KEY, JSON.stringify({
+    profileName: String(state.profileName || "").slice(0, 18),
+    profileXp: Math.max(0, Number(state.profileXp || 0) || 0),
+    profileWins: Math.max(0, Number(state.profileWins || 0) || 0),
+    profileLosses: Math.max(0, Number(state.profileLosses || 0) || 0),
+    highStage: Math.max(0, Number(state.highStage || 0) || 0),
+    avatarId: String(state.avatarId || "spark"),
+    frameId: String(state.frameId || "default"),
+    diabloUnlocked: !!state.diabloUnlocked,
+    diabloClaimed: !!state.diabloClaimed,
+  }));
+}
+
+// =========================
+// PROFILE / RANK HELPERS
+// =========================
+const RANK_THEMES = {
+  Rookie:   { glow: "rankGlowRookie",   badge: "rankBadgeRookie",   flare: "rankFlareRookie" },
+  Bronze:   { glow: "rankGlowBronze",   badge: "rankBadgeBronze",   flare: "rankFlareBronze" },
+  Silver:   { glow: "rankGlowSilver",   badge: "rankBadgeSilver",   flare: "rankFlareSilver" },
+  Gold:     { glow: "rankGlowGold",     badge: "rankBadgeGold",     flare: "rankFlareGold" },
+  Platinum: { glow: "rankGlowPlatinum", badge: "rankBadgePlatinum", flare: "rankFlarePlatinum" },
+  Diamond:  { glow: "rankGlowDiamond",  badge: "rankBadgeDiamond",  flare: "rankFlareDiamond" },
+  Master:   { glow: "rankGlowMaster",   badge: "rankBadgeMaster",   flare: "rankFlareMaster" },
+  Legend:   { glow: "rankGlowLegend",   badge: "rankBadgeLegend",   flare: "rankFlareLegend" },
+};
+
+function applyRankTheme(el, rankName, kind) {
+  if (!el) return;
+  const rn = (rankName && RANK_THEMES[rankName]) ? rankName : 'Rookie';
+  const theme = RANK_THEMES[rn];
+  // clear old theme classes
+  Object.values(RANK_THEMES).forEach(t => {
+    if (t.badge) el.classList.remove(t.badge);
+    if (t.glow)  el.classList.remove(t.glow);
+    if (t.flare) el.classList.remove(t.flare);
+  });
+  const cls = theme[kind];
+  if (cls) el.classList.add(cls);
+  el.dataset.rank = rn;
+}
+
+function getRankIndexFromXp(xp) {
+  const val = Math.max(0, Number(xp || 0) || 0);
+  let idx = 0;
+  for (let i = 0; i < RANKS.length; i++) {
+    if (val >= RANKS[i].xp) idx = i;
+  }
+  return idx;
+}
+
+function getRankNameFromXp(xp) {
+  return (RANKS[getRankIndexFromXp(xp)] || RANKS[0]).name;
+}
+
+function rankIndexByName(name) {
+  const n = String(name || "").trim().toLowerCase();
+  const i = RANKS.findIndex(r => String(r.name).toLowerCase() === n);
+  return i >= 0 ? i : 0;
+}
+
+// Some milestones should never be "taken away" even if we rebalance thresholds later.
+// If the player already unlocked the Legend reward, we treat them as at least Legend for UI + cosmetics.
+function getEffectiveRankIndex() {
+  let idx = getRankIndexFromXp(state.profileXp);
+  if (state && state.diabloUnlocked) idx = Math.max(idx, rankIndexByName("Legend"));
+  return idx;
+}
+
+function isRankAtLeast(rankName) {
+  return getEffectiveRankIndex() >= rankIndexByName(rankName);
+}
+
+function getNextRankInfo() {
+  const idx = getEffectiveRankIndex();
+  const next = RANKS[idx + 1] || null;
+  const cur = RANKS[idx] || RANKS[0];
+  return { cur, next, idx };
+}
+
+function applyCosmeticsToBattleUI() {
+  // Avatar
+  const a = AVATARS.find(x => x.id === state.avatarId) || AVATARS[0];
+  const avatarEl = document.getElementById("profileAvatar");
+  if (avatarEl) avatarEl.textContent = a.icon;
+
+  // Frame (applies to player's imgFrame)
+  const pFrame = document.getElementById("pFrame");
+  if (pFrame) {
+    // safety: ensure this wrapper always behaves like a frame even if HTML was edited
+    if (!pFrame.classList.contains("imgFrame")) pFrame.classList.add("imgFrame");
+    // remove any prior frame classes
+    const allFrameClasses = FRAMES.map(f => f.className).filter(Boolean);
+    allFrameClasses.forEach(cls => pFrame.classList.remove(cls));
+    const f = FRAMES.find(x => x.id === state.frameId) || FRAMES[0];
+    if (f.className) pFrame.classList.add(f.className);
+  }
+}
+
+let _profilePrevView = "home";
+
+function openProfile(fromView) {
+  _profilePrevView = fromView || _profilePrevView || "home";
+  renderProfileUI();
+  showView("profile");
+}
+
+function renderProfileUI() {
+  // name
+  const nameInput = document.getElementById("profileNameInput");
+  if (nameInput) nameInput.value = state.profileName || "";
+
+  // rank
+  const xp = Math.max(0, Number(state.profileXp || 0) || 0);
+  const { cur, next } = getNextRankInfo();
+  const rankName = cur.name;
+
+  const pillRank = document.getElementById("profileRankPill");
+  if (pillRank) pillRank.textContent = `Rank: ${rankName}`;
+
+  const pillXp = document.getElementById("profileXpPill");
+  if (pillXp) pillXp.textContent = `XP: ${xp}`;
+
+  const badge = document.getElementById("rankBadge");
+  if (badge) { badge.textContent = rankName; applyRankTheme(badge, rankName, "badge"); }
+
+  // progress bar
+  const label = document.getElementById("rankProgressLabel");
+  const nums = document.getElementById("rankProgressNums");
+  const fill = document.getElementById("rankBarFill");
+  if (fill) applyRankTheme(fill, rankName, "glow");
+  if (next) {
+    const start = cur.xp;
+    const end = next.xp;
+    const curInBand = Math.max(0, xp - start);
+    const band = Math.max(1, end - start);
+    const pct = Math.max(0, Math.min(1, curInBand / band));
+    if (label) label.textContent = `Next rank: ${next.name}`;
+    if (nums) nums.textContent = `${xp} / ${end}`;
+    if (fill) fill.style.width = `${Math.round(pct * 100)}%`;
+    if (fill) applyRankTheme(fill, rankName, "glow");
+  } else {
+    if (label) label.textContent = `Max rank achieved`;
+    if (nums) nums.textContent = `${xp} / ${xp}`;
+    if (fill) fill.style.width = `100%`;
+    if (fill) applyRankTheme(fill, rankName, "glow");
+  }
+
+  // stats
+  const winsEl = document.getElementById("statWins");
+  const lossesEl = document.getElementById("statLosses");
+  const bestEl = document.getElementById("statBestStreak");
+  const highStageEl = document.getElementById("statHighStage");
+  if (winsEl) winsEl.textContent = String(state.profileWins || 0);
+  if (lossesEl) lossesEl.textContent = String(state.profileLosses || 0);
+  if (bestEl) bestEl.textContent = String(state.bestStreak || 0);
+  if (highStageEl) highStageEl.textContent = String(state.highStage || 0);
+
+  // relic
+  const relicEl = document.getElementById("profileRelic");
+  if (relicEl) {
+    const rid = state.equippedRelicId;
+    const r = (RELICS || []).find(x => x.id === rid);
+    relicEl.textContent = r ? r.name : "None";
+  }
+
+  renderCosmeticsGrids();
+  applyCosmeticsToBattleUI();
+}
+
+function renderCosmeticsGrids() {
+  const avatarGrid = document.getElementById("avatarGrid");
+  const frameGrid = document.getElementById("frameGrid");
+
+  if (avatarGrid) {
+    avatarGrid.innerHTML = "";
+    AVATARS.forEach((a) => {
+      const unlocked = isRankAtLeast(a.unlockRank);
+      const btn = document.createElement("button");
+      btn.className = `cosItem ${unlocked ? "" : "locked"} ${state.avatarId === a.id ? "selected" : ""}`;
+      btn.innerHTML = `<div class="cosIcon">${a.icon}</div><div class="cosLabel">${a.unlockRank}</div>`;
+      btn.title = unlocked ? "Select" : `Locked • Rank ${a.unlockRank}`;
+      btn.addEventListener("click", () => {
+        if (!unlocked) return;
+        state.avatarId = a.id;
+        saveProgress();
+        renderProfileUI();
+      });
+      avatarGrid.appendChild(btn);
+    });
+  }
+
+  if (frameGrid) {
+    frameGrid.innerHTML = "";
+    FRAMES.forEach((f) => {
+      const unlocked = isRankAtLeast(f.unlockRank);
+      const btn = document.createElement("button");
+      btn.className = `cosItem ${unlocked ? "" : "locked"} ${state.frameId === f.id ? "selected" : ""}`;
+      const swatchClass = f.className ? `cosFrameSwatch ${f.className}` : "frameDefaultSwatch";
+      btn.innerHTML = `<div class="${swatchClass}"></div><div class="cosLabel">${f.unlockRank}</div>`;
+      btn.title = unlocked ? "Select" : `Locked • Rank ${f.unlockRank}`;
+      btn.addEventListener("click", () => {
+        if (!unlocked) return;
+        state.frameId = f.id;
+        saveProgress();
+        renderProfileUI();
+      });
+      frameGrid.appendChild(btn);
+    });
+  }
+}
+
+function showRankUpOverlay(oldRank, newRank, unlockLines) {
+  const overlay = document.getElementById("rankUpOverlay");
+  if (!overlay) return;
+  // theme the whole overlay based on new rank
+  applyRankTheme(overlay, newRank, "flare");
+  const sub = document.getElementById("rankUpSub");
+  const badge = document.getElementById("rankUpBadge");
+  const unlocks = document.getElementById("rankUpUnlocks");
+
+  if (sub) sub.textContent = `${oldRank} → ${newRank}`;
+  if (badge) { badge.textContent = newRank; applyRankTheme(badge, newRank, "badge"); }
+
+  if (unlocks) {
+    unlocks.innerHTML = (unlockLines || []).map(t => `<div class="rankUnlockLine">${t}</div>`).join("") || `<div class="rankUnlockLine">New cosmetics may have unlocked ✨</div>`;
+  }
+
+  overlay.style.display = "flex";
+  applyRankTheme(overlay, newRank, "flare");
+  overlay.classList.remove("rankUpShow");
+  void overlay.offsetWidth;
+  overlay.classList.add("rankUpShow");
+  playSfx("sfxJackpot", 0.6);
+  setTimeout(() => { overlay.style.display = "none"; overlay.classList.remove("rankUpShow"); }, 2400);
+}
+
+function maybeHandleRankChange(prevXp, reasonLabel) {
+  const before = getRankIndexFromXp(prevXp);
+  const after = getRankIndexFromXp(state.profileXp);
+  if (after <= before) return;
+
+  const oldRank = RANKS[before]?.name || "Rookie";
+  const newRank = RANKS[after]?.name || "Rookie";
+
+  // Collect unlock lines for this new rank
+  const unlockedAvatars = AVATARS.filter(a => a.unlockRank === newRank).map(a => `Avatar unlocked: ${a.icon}`);
+  const unlockedFrames = FRAMES.filter(f => f.unlockRank === newRank && f.id !== "default").map(f => `Frame unlocked: ${f.label}`);
+  const lines = [...unlockedAvatars, ...unlockedFrames];
+
+  showRankUpOverlay(oldRank, newRank, lines);
+  log(`🏅 Rank Up! ${oldRank} → ${newRank}${reasonLabel ? ` (${reasonLabel})` : ""}`, "good");
+
+  // Legend reward
+  if (newRank === "Legend") {
+    unlockDiabloLegendReward();
+  }
+
+  saveProgress();
+}
+
+function addProfileXp(amount, reasonLabel) {
+  const add = Math.max(0, Number(amount || 0) || 0);
+  if (add <= 0) return;
+  const prev = Number(state.profileXp || 0) || 0;
+  state.profileXp = prev + add;
+  maybeHandleRankChange(prev, reasonLabel);
+  // If profile screen is open, live-refresh the rank UI
+  try { if (state.currentView === "profile") renderProfileUI(); } catch(e) {}
+  saveProgress();
+}
+
+function unlockDiabloLegendReward() {
+  if (state.diabloUnlocked) return;
+  state.diabloUnlocked = true;
+  state.diabloClaimed = true; // auto-claimed
+
+  state.owned = state.owned || {};
+  state.owned.diablo = true;
+
+  // Big moment in UI
+  showDiabloLegendRewardFX();
+  // Extra clear message for the player (requested)
+  showToast("✨ New card unlocked — check your cards now!", "good");
+  try { floatingDamage("player", "NEW CARD UNLOCKED!", "good"); } catch(e) {}
+  try { log("✨ New card unlocked — check your cards now!", "good"); } catch(e) {}
+  saveProgress();
+}
+
+function showDiabloLegendRewardFX() {
+  // Reuse RankUp overlay (already styled) but make it a "Legend Reward" reveal.
+  const overlay = document.getElementById("rankUpOverlay");
+  if (!overlay) {
+    alert("🔥 LEGEND REWARD! You unlocked Diablo!");
+    return;
+  }
+  const sub = document.getElementById("rankUpSub");
+  const badge = document.getElementById("rankUpBadge");
+  const unlocks = document.getElementById("rankUpUnlocks");
+
+  if (sub) sub.textContent = `🔥 LEGEND REWARD UNLOCKED`;
+  if (badge) badge.textContent = `DIABLO`;
+  if (unlocks) {
+    unlocks.innerHTML = `
+      <div class="rankUnlockLine" style="margin-bottom:10px;">You have claimed the exclusive card:</div>
+      <div class="rankUnlockLine" style="font-weight:900;letter-spacing:.3px;">🔥 Diablo</div>
+      <div class="rankUnlockLine" style="opacity:.9;">2 DMG • 5 DEF • 8 LIFE</div>
+      <div class="rankUnlockLine" style="opacity:.9;">Ability: 12 DMG + 4 Armor + 7 Life</div>
+      <div style="margin-top:10px;display:flex;justify-content:center;">
+        <img src="cards/diablo.png" alt="Diablo" style="width:140px;height:140px;object-fit:cover;border-radius:16px;box-shadow:0 0 40px rgba(255,90,0,.25),0 0 90px rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.15);" />
+      </div>
+    `;
+  }
+
+  overlay.style.display = "flex";
+  playSfx("sfxJackpot", 0.8);
+  playSfx("sfxWin", 0.65);
+  setTimeout(() => { overlay.style.display = "none"; }, 3600);
+
+  log("🔥 LEGEND REWARD: Diablo unlocked and added to your collection!", "good");
 }
 
 function updateGoldUI() {
@@ -1873,13 +2427,13 @@ function bumpWinStreakOnWin() {
 }
 
 function showView(view) {
-  const ids = ["home", "profile", "gallery", "setup", "game", "shop"];
+  state.currentView = view;
+  const ids = ["home", "gallery", "setup", "game", "shop", "profile"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.style.display = id === view ? "block" : "none";
   });
   updateGoldUI();
-  if (view === "profile") updateProfileUI();
 }
 
 // =========================
@@ -1888,6 +2442,7 @@ function showView(view) {
 function cloneCard(card) {
   const st = (typeof getUpgradedStats === 'function') ? getUpgradedStats(card) : { atk: card.atk, def: card.def, hp: card.hp, level: 0 };
   return {
+    uid: (__CARD_UID++),
     id: card.id,
     name: card.name,
     img: card.img,
@@ -1897,6 +2452,7 @@ function cloneCard(card) {
     hp: st.hp,
     shield: st.def,
     cooldown: 0,
+    titanKillCd: 0,
     frozen: 0,
     stunned: 0,
     boost: 0,
@@ -1927,6 +2483,31 @@ function log(msg, cls = "") {
   el.textContent = msg;
   $("log").appendChild(el);
   $("log").scrollTop = $("log").scrollHeight;
+}
+
+// =========================
+// TOAST (top message)
+// =========================
+function showToast(msg, kind = "info") {
+  if (!msg) return;
+  // Kill previous toast if present
+  const prev = document.getElementById("toastTop");
+  if (prev) prev.remove();
+
+  const t = document.createElement("div");
+  t.id = "toastTop";
+  t.className = `toastTop ${kind}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  // restart animation
+  void t.offsetWidth;
+  t.classList.add("show");
+
+  setTimeout(() => {
+    t.classList.remove("show");
+    t.classList.add("hide");
+    setTimeout(() => { try { t.remove(); } catch(e){} }, 260);
+  }, 1600);
 }
 
 // =========================
@@ -2007,63 +2588,62 @@ function spawnAttackFx(from, to) {
   setTimeout(() => fx.remove(), 260);
 }
 
-// =========================
-// 🔥 PHOENIX REVIVE FX (stunning)
-// =========================
-function ensureToastLayer() {
-  let layer = document.getElementById("toastLayer");
-  if (!layer) {
-    layer = document.createElement("div");
-    layer.id = "toastLayer";
-    document.body.appendChild(layer);
-  }
-  return layer;
-}
-
-function showToast(text, cls = "") {
-  const layer = ensureToastLayer();
-  if (!layer) return;
-  const el = document.createElement("div");
-  el.className = `toast ${cls || ""}`.trim();
-  el.textContent = text;
-  layer.appendChild(el);
-  setTimeout(() => el.remove(), 1700);
-}
-
-function spawnReviveFx(who) {
+// 🔥 REVIVE FX (Phoenix Ember)
+function spawnReviveFx(target, big = true) {
   const layer = ensureFxLayer();
-  if (!layer) return;
-  const card = who === "player" ? document.getElementById("playerCard") : document.getElementById("enemyCard");
-  if (!card) return;
+  const card = target === "player" ? document.getElementById("playerCard") : document.getElementById("enemyCard");
+  if (!layer || !card) return;
 
-  const C = centerOf(card);
+  const A = centerOf(card);
   const lr = layer.getBoundingClientRect();
-  const x = C.x - lr.left;
-  const y = C.y - lr.top;
+  const x = A.x - lr.left;
+  const y = A.y - lr.top;
 
-  // Main phoenix burst
+  // Ring + sparks
   const fx = document.createElement("div");
-  fx.className = "reviveFx reviveFxBig";
+  fx.className = "reviveFx" + (big ? " reviveFxBig" : "");
   fx.style.left = `${x}px`;
   fx.style.top = `${y}px`;
   layer.appendChild(fx);
 
-  // Extra ember burst for "stunning" feel
-  const embers = document.createElement("div");
-  embers.className = "reviveEmbers";
-  embers.style.left = `${x}px`;
-  embers.style.top = `${y}px`;
-  layer.appendChild(embers);
+  // Ember shockwave
+  const emb = document.createElement("div");
+  emb.className = "reviveEmbers";
+  emb.style.left = `${x}px`;
+  emb.style.top = `${y}px`;
+  layer.appendChild(emb);
 
-  // Quick screen flare
-  const flare = document.createElement("div");
-  flare.className = "reviveScreenFlare";
-  document.body.appendChild(flare);
-
-  setTimeout(() => fx.remove(), 1150);
-  setTimeout(() => embers.remove(), 1250);
-  setTimeout(() => flare.remove(), 420);
+  setTimeout(() => { try { fx.remove(); } catch(e){} }, 1200);
+  setTimeout(() => { try { emb.remove(); } catch(e){} }, 1200);
 }
+
+function cardReviveFlip(target) {
+  const card = target === "player" ? document.getElementById("playerCard") : document.getElementById("enemyCard");
+  if (!card) return;
+
+  // Ensure the revive animation only plays when a revive actually happens,
+  // and that it always starts from a "dead" visual state (so it doesn't snap).
+  card.classList.remove("dieFlip", "revivePulse", "reviveFlip");
+
+  // Force the starting pose to match the end of dieFlip (rotateY 180, grayscale, dim)
+  card.style.transform = "rotateY(180deg) scale(.98)";
+  card.style.opacity = ".35";
+  card.style.filter = "grayscale(1)";
+
+  void card.offsetWidth;
+  card.classList.add("revivePulse", "reviveFlip");
+
+  setTimeout(() => {
+    try {
+      card.classList.remove("revivePulse", "reviveFlip");
+      // Clean any inline styles we applied to stage the animation.
+      card.style.transform = "";
+      card.style.opacity = "";
+      card.style.filter = "";
+    } catch(e){}
+  }, 900);
+}
+
 
 // ✅ DIE FLIP FX
 function cardDieFlip(who) {
@@ -2085,29 +2665,6 @@ function cardDieFlip(who) {
   void card.offsetWidth;
   card.classList.add("dieFlip");
 }
-
-// ✅ REVIVE FLIP + PULSE
-function cardReviveFlip(who) {
-  const card = who === "player" ? document.getElementById("playerCard") : document.getElementById("enemyCard");
-  if (!card) return;
-
-  // Remove death/impact classes so revive looks clean
-  card.classList.remove(
-    "dieFlip",
-    "hitFlash",
-    "attackLeft",
-    "attackRight",
-    "recoilLeft",
-    "recoilRight",
-    "defendBump"
-  );
-
-  // Restart animations
-  card.classList.remove("reviveFlip", "revivePulse");
-  void card.offsetWidth;
-  card.classList.add("reviveFlip");
-  card.classList.add("revivePulse");
-}
 // ✅ RESET CARD VISUAL STATE (fix: gray/flipped next enemy)
 function resetCardVisuals() {
   const pEl = document.getElementById("playerCard");
@@ -2119,8 +2676,8 @@ function resetCardVisuals() {
     // remove death flip + any lingering impact classes
     el.classList.remove(
       "dieFlip",
-      "reviveFlip",
       "revivePulse",
+      "reviveFlip",
       "hitFlash",
       "attackLeft",
       "attackRight",
@@ -2197,6 +2754,8 @@ function applyDamage(defender, dmg, opts = {}) {
     if (defender.shield > 0) {
       absorbed = Math.min(defender.shield, dmg);
       defender.shield = Math.max(0, defender.shield - absorbed);
+      // Keep DEF and Shield in sync
+      defender.def = defender.shield;
       // ✅ no HP overflow in the same hit
       hpLoss = 0;
     } else {
@@ -2204,6 +2763,12 @@ function applyDamage(defender, dmg, opts = {}) {
       defender.hp = Math.max(0, defender.hp - hpLoss);
     }
   }
+
+  // ✅ Keep DEF and Shield in sync (even when no shield was present)
+  defender.def = Number(defender.shield || 0);
+
+  // How much damage actually landed this hit (armor + HP)
+  const actualTaken = Math.max(0, Number(absorbed || 0) + Number(hpLoss || 0));
 
   const who = defender === state.player ? "player" : "enemy";
   pulseHit(who);
@@ -2224,7 +2789,7 @@ function applyDamage(defender, dmg, opts = {}) {
     if (damageType === "true") {
       log(`✨ TRUE damage ignores armor → ${defender.name} takes ${hpLoss} HP.`, "warn");
     } else if (absorbed > 0) {
-      log(`🛡️ Armor absorbs ${absorbed}. (No HP overflow this hit.)`, "warn");
+      log(`🛡️ Defense absorbs ${absorbed}. (No HP overflow this hit.)`, "warn");
     } else {
       log(`❤️ ${defender.name} takes ${hpLoss} HP.`, "warn");
     }
@@ -2258,36 +2823,33 @@ function applyDamage(defender, dmg, opts = {}) {
   }
 
   // ✅ OP Relic: Phoenix Ember (revive once per battle at 30% HP)
+  // Only trigger on an actual *death* from this hit (i.e., damage landed), and only while in battle.
   // Trigger AFTER damage is applied, before any win/lose checks happen in callers.
   if (
+    state.phase === "battle" &&
+    actualTaken > 0 &&
     defender === state.player &&
     hasRelic("phoenixEmber") &&
     Number(defender.hp) <= 0 &&
     !defender.phoenixUsed
   ) {
     defender.phoenixUsed = true;
-    state.justRevived = true;
     defender.hp = Math.max(1, Math.ceil(Number(defender.maxHp || 1) * 0.30));
-    log(`🔥 Phoenix Ember ignites! You revive at ${defender.hp} HP.`, "good");
-    floatingDamage("player", "REVIVE", "good");
-    // ✨ Stunning revive presentation
-    cardReviveFlip("player");
-    spawnReviveFx("player");
-    showToast("✨ You have been revived!", "good");
 
-    // optional: use an existing sfx if available
-    try {
-      const s = document.getElementById("sfxJackpot") || document.getElementById("sfxSkill");
-      if (s) { s.currentTime = 0; s.volume = 0.65; s.play(); }
-    } catch (e) {}
+    // ✨ Make the revive feel epic (FX should ONLY happen when the revive actually triggers)
+    try { spawnReviveFx("player", true); } catch (e) {}
+    try { cardReviveFlip("player"); } catch (e) {}
+
+    log(`🔥 Phoenix Ember ignites! You revive at ${defender.hp} HP.`, "good");
+    floatingDamage("player", `🔥 +${defender.hp}`, "good");
   }
 
+  // Post-hit effects
+
   // ✅ OP Relic: Void Mirror (reflect 25% of damage taken)
-  // Reflect based on the ACTUAL damage that happened this hit (Armor + HP).
-  const actualTaken = Math.max(0, Number(absorbed || 0) + Number(hpLoss || 0));
   if (defender === state.player && hasRelic("voidMirror") && actualTaken > 0 && state.enemy && Number(state.enemy.hp) > 0) {
     const reflect = Math.max(1, Math.ceil(actualTaken * 0.25));
-    applyDamage(state.enemy, reflect, { silent: true, source: "skill", attacker: state.player, attackerName: defender.name });
+    applyDamage(state.enemy, reflect, { silent: true, source: "skill", damageType: "true", attacker: state.player, attackerName: state.player?.name || "Player" });
     log(`🪞 Void Mirror reflects ${reflect} damage!`, "good");
     floatingDamage("enemy", `-${reflect}`, "warn");
   }
@@ -2307,26 +2869,15 @@ function applyDamage(defender, dmg, opts = {}) {
     }
   }
 
-  // Relicborn Titan on-kill scaling (attack only)
+  // Entity passive on enemy death
   try { triggerRelicbornTitanOnKill(opts.attacker || null, defender, opts || {}); } catch (e) {}
 
-  // Reflect relic
-  if (defender === state.player && hasRelic("spikedArmor") && dmg > 0 && state.enemy && Number(state.enemy.hp) > 0) {
-    applyDamage(state.enemy, 1, { silent: true, source: "skill", attackerName: defender.name });
+  // ✅ Reflect relic: Spiked Armor
+  if (defender === state.player && hasRelic("spikedArmor") && actualTaken > 0 && state.enemy && Number(state.enemy.hp) > 0) {
+    applyDamage(state.enemy, 1, { silent: true, source: "skill", damageType: "true", attackerName: defender.name });
     log(`🪬 Spiked Armor reflects 1 damage!`, "good");
     floatingDamage("enemy", "-1", "warn");
   }
-
-  // ✅ OP Relic: Void Mirror (reflect 25% of damage taken)
-  try {
-    const taken = Math.max(0, Number(absorbed || 0) + Number(hpLoss || 0));
-    if (taken > 0 && defender === state.player && hasRelic("voidMirror") && state.enemy && Number(state.enemy.hp) > 0) {
-      const ref = Math.max(1, Math.ceil(taken * 0.25));
-      applyDamage(state.enemy, ref, { silent: true, source: "skill", attacker: state.player, attackerName: state.player?.name || "Player" });
-      log(`🪬 Void Mirror reflects ${ref} damage back!`, "good");
-      floatingDamage("enemy", `-${ref}`, "warn");
-    }
-  } catch (e) {}
 
   updateUI();
 }
@@ -2345,6 +2896,7 @@ function tickStatuses(f) {
 
   // ✅ existing timers
   if (f.cooldown > 0) f.cooldown -= 1;
+  if (f.titanKillCd > 0) f.titanKillCd -= 1;
   if (f.frozen > 0) f.frozen -= 1;
   if (f.stunned > 0) f.stunned -= 1;
   if (f.noArmorGain > 0) f.noArmorGain -= 1;
@@ -2381,7 +2933,11 @@ function tickStatuses(f) {
     const dSh = Number(f.debuffShield || 0);
 
     if (dAtk > 0) f.atk = Math.max(0, Number(f.atk || 0) - dAtk);
-    if (dSh > 0) f.shield = Math.max(0, Number(f.shield || 0) - dSh);
+    if (dSh > 0) {
+      f.shield = Math.max(0, Number(f.shield || 0) - dSh);
+      // Keep DEF and Shield in sync
+      f.def = f.shield;
+    }
 
     log(`📉 ${f.name} suffers debuff (-${dAtk} ATK, -${dSh} Armor)!`, "warn");
 
@@ -2584,6 +3140,10 @@ function updateUI() {
   const p = state.player, e = state.enemy;
   if (!p || !e) return;
 
+  // ✅ Keep the legacy DEF field synced with current shield/armor so the UI shows one consistent Defense value.
+  p.def = Number(p.shield || 0);
+  e.def = Number(e.shield || 0);
+
   $("turnTag").textContent = `Turn: ${state.turn === "player" ? "Player" : "Enemy"}`;
   $("roundTag").textContent = `Round: ${state.round}`;
   $("stageTag").textContent = `Stage: ${state.stage}`;
@@ -2615,12 +3175,12 @@ function updateUI() {
   $("pHP").textContent = `${p.hp}/${p.maxHp}`;
   $("pATK").textContent = p.atk;
   $("pDEF").textContent = p.def;
-  $("pShield").textContent = p.shield;
+  $("pShield").textContent = p.def;
 
   $("eHP").textContent = `${e.hp}/${e.maxHp}`;
   $("eATK").textContent = e.atk;
   $("eDEF").textContent = e.def;
-  $("eShield").textContent = e.shield;
+  $("eShield").textContent = e.def;
 
   $("pHpBar").style.width = `${Math.round((p.hp / p.maxHp) * 100)}%`;
   $("eHpBar").style.width = `${Math.round((e.hp / e.maxHp) * 100)}%`;
@@ -2659,26 +3219,11 @@ function checkWin() {
 
   // LOSE -> flip, then show Defeat modal (Go Home)
   if (p.hp <= 0) {
-    // 🪬 Phoenix Ember: once per battle revive at 30% HP (player only)
-    if (hasRelic("phoenixEmber") && p && !p.phoenixUsed) {
-      p.phoenixUsed = true;
-      state.justRevived = true;
-      const revived = Math.max(1, Math.ceil(Number(p.maxHp || 1) * 0.30));
-      p.hp = revived;
-      log(`🪬 Phoenix Ember ignites! You revive at ${revived} HP.`, "good");
-      floatingDamage("player", `+${revived}`, "good");
-      updateUI();
-      return false;
-    }
 
-    // profile tracking (defeat)
-    if (!state.profile) state.profile = { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 };
-    state.profile.losses = Math.max(0, Number(state.profile.losses || 0)) + 1;
-    state.profile.highStage = Math.max(Number(state.profile.highStage || 0), Number(state.stage || 0));
-    saveProgress();
-
-    // small consolation XP
-    addXp(10 + Math.floor(Math.max(0, Number(state.stage || 0)) * 0.6), "defeat");
+    // Profile stats
+    state.profileLosses = Math.max(0, Number(state.profileLosses || 0) || 0) + 1;
+    state.highStage = Math.max(Number(state.highStage || 0) || 0, Number(state.stage || 0) || 0);
+    addProfileXp(12 + Math.floor((Number(state.stage || 0) || 0) * 1.5), "Defeat");
 
     resetWinStreak();
     cardDieFlip("player");
@@ -2706,22 +3251,6 @@ function checkWin() {
 
   // WIN -> flip enemy, then reward gold (no modal) and spawn next enemy
   if (e.hp <= 0) {
-        if (state.player && state.player.id === "luckyApexEntity" && state.lastAction === "attack") {
-      const p = state.player;
-      p.atk = Math.max(1, Number(p.atk || 0) * 2);
-      p.def = Math.max(0, Number(p.def || 0) * 2);
-
-      const oldHp = Number(p.hp || 0);
-      p.maxHp = Math.max(1, Number(p.maxHp || 1) * 2);
-      p.hp = Math.min(p.maxHp, oldHp * 2);
-
-      // Double current shield but respect the current cap
-      p.shield = Math.min(getShieldCap(), Number(p.shield || 0) * 2);
-
-      log(`⭐ ${p.name} defeats an enemy → stats doubled!`, "good");
-      floatingDamage("player", "⭐ x2", "good");
-      updateUI();
-    }
 
     cardDieFlip("enemy");
     state.phase = "over";
@@ -2732,21 +3261,17 @@ function checkWin() {
 
     // after death flip (0.55s) + 1s delay
     setTimeout(() => {
+      // Profile stats
+      state.profileWins = Math.max(0, Number(state.profileWins || 0) || 0) + 1;
+      state.highStage = Math.max(Number(state.highStage || 0) || 0, Number(state.stage || 0) || 0);
+      addProfileXp(35 + Math.floor((Number(state.stage || 0) || 0) * 4), "Victory");
+
       addGold(reward);
       floatingDamage("player", `+${reward}g`, "good");
       log(`🏆 Victory! +${reward} gold.`, "good");
 
       // ✅ Win streak milestones (10/20/30/50)
       bumpWinStreakOnWin();
-
-      // profile tracking (win) + XP
-      if (!state.profile) state.profile = { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 };
-      state.profile.wins = Math.max(0, Number(state.profile.wins || 0)) + 1;
-      state.profile.highStage = Math.max(Number(state.profile.highStage || 0), Number(state.stage || 0));
-      saveProgress();
-      const streakBonus = Math.min(15, Number(state.winStreak || 0)) * 2;
-      const xpGain = 25 + Math.floor(Math.max(1, Number(state.stage || 1)) * 6) + streakBonus;
-      addXp(xpGain, "win");
 
       state.stage += 1;
       spawnNextEnemy();
@@ -2791,9 +3316,6 @@ function nextTurn() {
 function enemyAI() {
   if (state.phase !== "battle") return;
 
-  // clear any stale revive flag from a previous action
-  state.justRevived = false;
-
   const e = state.enemy, p = state.player;
 
   if (e.frozen > 0) {
@@ -2827,28 +3349,10 @@ function enemyAI() {
         updateUI();
         // ✅ If the skill ended the fight, stop here. Otherwise continue to the normal attack.
         if (checkWin()) return;
-
-        // ✅ If Phoenix Ember revived you from the skill damage, cancel the enemy's follow-up attack.
-        if (state.justRevived) {
-          log(`🔥 Phoenix Ember rebirth! Enemy follow-up attack is canceled.`, "good");
-          // consume the flag so it doesn't affect future turns
-          state.justRevived = false;
-          nextTurn();
-          return;
-        }
       } else if (res && res.ok === false) {
         log(`✨ Enemy tried skill: ${res.msg}`, "warn");
       }
     }
-  }
-
-  // ✅ If Phoenix Ember revived you from the enemy's ability, cancel the follow-up basic attack.
-  // This prevents "leftover" damage in the same enemy turn from killing you again instantly.
-  if (state.justRevived) {
-    log(`🔥 You have been revived! Enemy follow-up damage is canceled.`, "good");
-    state.justRevived = false;
-    nextTurn();
-    return;
   }
 
   const dmg = dmgCalc(e);
@@ -2866,8 +3370,6 @@ function enemyAI() {
 // =========================
 function playerAttack() {
   state.lastAction = "attack";
-  // clear any stale revive flag from a previous action
-  state.justRevived = false;
   const p = state.player, e = state.enemy;
   if (p.frozen > 0) {
     log(`${p.name} is frozen and cannot act!`, "warn");
@@ -2923,8 +3425,6 @@ function playerAttack() {
 
 function playerSkill() {
   state.lastAction = "skill";
-  // clear any stale revive flag from a previous action
-  state.justRevived = false;
   const p = state.player, e = state.enemy;
   if (p.frozen > 0) {
     log(`${p.name} is frozen and cannot act!`, "warn");
@@ -3108,15 +3608,15 @@ function pickRandomFrom(arr) {
 function rollLuckyReward() {
   const r = Math.random();
 
-  // ✅ 1%: Card (Relicborn Titan)
+  // ✅ 1%: Card (Entity)
   if (r < LUCKY_DRAW.legendaryChance) {
     return {
       type: "card",
       id: "relicbornTitan",
-      title: "CARD — Relicborn Titan",
+      title: "CARD — Entity",
       icon: "🌟",
       rarity: "legendary",
-      desc: "Unlocked: Relicborn Titan (1% drop)."
+      desc: "Unlocked: Entity (1% drop)."
     };
   }
 
@@ -3223,61 +3723,119 @@ function setLuckyModalProgress(idx, total) {
   }
 }
 
-function openLuckyModal(reward) {
+function openLuckyModal(payload) {
   const modal = $("luckyModal");
   if (!modal) return;
 
   const title = $("luckyModalTitle");
   const pill = $("luckyModalPill");
-  const body = $("luckyRewardBody");
   const hint = $("luckyModalHint");
   const card = $("luckyCardReveal");
   const name = $("luckyRewardName");
   const rarityEl = $("luckyRewardRarity");
+  const body = $("luckyRewardBody");
+  const strip = $("luckyMultiStrip");
+  const prog = $("luckyProgress");
+  const claimBtn = $("btnLuckyClaim");
 
-  // Multi progress (1 / 5)
-  const list = Array.isArray(state.luckyPendingRewards) ? state.luckyPendingRewards : [];
-  const idx = Number(state.luckyPendingIndex || 0);
-  const total = Math.max(1, list.length || 1);
-  setLuckyModalProgress(idx, total);
+  const isMulti = Array.isArray(payload);
+  const rewards = isMulti ? payload : [payload];
 
-  if (title) title.textContent = reward?.title || "🎰 Lucky Draw";
-  if (pill) pill.textContent = reward?.rarity ? reward.rarity.toUpperCase() : "REWARD";
+  // Track pending mode so Claim behaves correctly.
+  state.luckyPendingMode = isMulti ? "multi" : "single";
+  state.luckyPendingRewards = rewards;
+  state.luckyPendingIndex = 0;
 
-  if (name) name.textContent = reward?.title || "Reward";
-  if (rarityEl) rarityEl.textContent = reward?.rarity ? reward.rarity.toUpperCase() : "COMMON";
+  if (prog) prog.style.display = "none";
 
-  if (body) {
-    body.innerHTML = `
-      <div class="luckyBigIcon">${reward?.icon || "✨"}</div>
-      <div class="luckyBigText">${reward?.title || "Reward"}</div>
-      <div class="muted" style="margin-top:8px;">${reward?.desc || ""}</div>
-    `;
+  if (!isMulti) {
+    const reward = rewards[0] || null;
+
+    if (title) title.textContent = reward?.title || "🎰 Lucky Draw";
+    if (pill) pill.textContent = reward?.rarity ? reward.rarity.toUpperCase() : "REWARD";
+
+    if (name) name.textContent = reward?.title || "Reward";
+    if (rarityEl) rarityEl.textContent = reward?.rarity ? reward.rarity.toUpperCase() : "COMMON";
+
+    if (body) {
+      body.innerHTML = `
+        <div class="luckyBigIcon">${reward?.icon || "✨"}</div>
+        <div class="luckyBigText">${reward?.title || "Reward"}</div>
+        <div class="muted" style="margin-top:8px;">${reward?.desc || ""}</div>
+      `;
+    }
+
+    if (strip) strip.style.display = "none";
+    if (card) {
+      card.style.display = "block";
+      card.classList.remove("flipIn", "legendaryBurst");
+      void card.offsetWidth;
+      card.classList.add("flipIn");
+      if (reward?.rarity === "legendary") card.classList.add("legendaryBurst");
+    }
+
+    if (hint) hint.textContent = "Tap Claim to add it to your account.";
+    if (claimBtn) claimBtn.textContent = "✨ Claim";
+
+    modal.style.display = "flex";
+
+    // Jackpot sound for legendary
+    if (reward?.rarity === "legendary") {
+      playSfx("sfxJackpot", 0.95);
+      const box = modal.querySelector(".modalBox");
+      if (box) {
+        box.classList.remove("luckyShake");
+        void box.offsetWidth;
+        box.classList.add("luckyShake");
+      }
+      confettiBurst(80);
+    }
+
+    return;
   }
 
-  if (hint) hint.textContent = "Tap Claim to add it to your account.";
+  // ===== Multi draw (5x) =====
+  if (title) title.textContent = "🎰 Lucky Draw — 5x";
+  if (pill) pill.textContent = "RESULTS";
+  if (hint) hint.textContent = "Tap Claim All to add all rewards to your account.";
+  if (claimBtn) claimBtn.textContent = "✨ Claim All";
+
+  if (card) card.style.display = "none";
+  if (strip) {
+    strip.style.display = "grid";
+    strip.innerHTML = rewards.map((r) => {
+      const isLeg = r?.rarity === "legendary";
+      let imgHtml = "";
+      if (r?.type === "card" && typeof findCardById === "function") {
+        const def = findCardById(r.id);
+        if (def?.img) imgHtml = `<img class="luckyMultiImg" src="${def.img}" alt="${def.name || "Card"}" />`;
+      }
+      return `
+        <div class="luckyMultiCard${isLeg ? " legendary" : ""}">
+          <div class="luckyMultiTop">
+            <div class="luckyMultiIcon">${r?.icon || "✨"}</div>
+            <div class="pill luckyMultiRarity">${(r?.rarity || "common").toUpperCase()}</div>
+          </div>
+          ${imgHtml}
+          <div class="luckyMultiTitle">${r?.title || "Reward"}</div>
+          <div class="muted luckyMultiDesc">${r?.desc || ""}</div>
+        </div>
+      `;
+    }).join("");
+  }
 
   modal.style.display = "flex";
 
-  // Flip-in animation every reveal
-  if (card) {
-    card.classList.remove("flipIn", "legendaryBurst");
-    void card.offsetWidth;
-    card.classList.add("flipIn");
-    if (reward?.rarity === "legendary") card.classList.add("legendaryBurst");
-  }
-
-  // Jackpot sound for legendary
-  if (reward?.rarity === "legendary") {
+  // Juice if any legendary in the 5
+  if (rewards.some((r) => r?.rarity === "legendary")) {
     playSfx("sfxJackpot", 0.95);
-    // extra juice
     const box = modal.querySelector(".modalBox");
     if (box) {
       box.classList.remove("luckyShake");
       void box.offsetWidth;
       box.classList.add("luckyShake");
     }
-    confettiBurst(total > 1 ? 110 : 80);
+    confettiBurst(110);
   }
 }
 
@@ -3347,38 +3905,36 @@ function doLuckyDraw(count) {
   // Delay reveal for drama
   setTimeout(() => {
     const first = state.luckyPendingRewards[0];
-    openLuckyModal(first);
+    if (n === 5) openLuckyModal(state.luckyPendingRewards);
+    else openLuckyModal(first);
     if (b1) b1.disabled = false;
     if (b5) b5.disabled = false;
   }, spinMs);
 }
 
-function claimNextLuckyReward() {
+function claimLuckyRewards() {
   const list = Array.isArray(state.luckyPendingRewards) ? state.luckyPendingRewards : [];
-  const i = Number(state.luckyPendingIndex || 0);
-  const reward = list[i];
-  if (!reward) {
+  const mode = String(state.luckyPendingMode || "single");
+
+  if (!list.length) {
     closeLuckyModal();
     return;
   }
 
-  applyLuckyReward(reward);
-
-  // Move to next reward (for 5x draws)
-  state.luckyPendingIndex = i + 1;
-  const next = list[state.luckyPendingIndex];
-  if (next) {
-    // Micro-transition between cards for a snappy multi-reveal
-    const card = $("luckyCardReveal");
-    if (card) {
-      card.classList.remove("flipIn");
-      void card.offsetWidth;
-    }
-    setTimeout(() => openLuckyModal(next), 140);
+  if (mode === "multi") {
+    list.forEach(applyLuckyReward);
   } else {
-    closeLuckyModal();
+    applyLuckyReward(list[0]);
   }
+
+  // clear pending
+  state.luckyPendingRewards = [];
+  state.luckyPendingIndex = 0;
+  state.luckyPendingMode = "single";
+
+  closeLuckyModal();
 }
+
 // =========================
 // START / RESET
 // =========================
@@ -3438,25 +3994,31 @@ state.phase = "pick";
 }
 
 // =========================
-// BUTTONS
+// BOOT (wire UI after DOM is ready)
 // =========================
-const safeOn = (id, fn) => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener("click", fn);
-};
+function bootGameUI() {
+  // =========================
+  // BUTTONS
+  // =========================
+  const safeOn = (id, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("click", fn);
+  };
 
-safeOn("btnNextEnemy", () => {
+  safeOn("btnNextEnemy", () => {
   if (state.phase !== "over") return;
 
   playSfx("sfxClick", 0.45);
   closeModal();
 
-  // Defeat: go back home/setup
+  // Defeat: go back to landing page (Home)
   if (state.modalAction === "home") {
     state.modalAction = null;
     const btnNext = $("btnNextEnemy");
     if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
+    // Reset the run, but land on the true Home screen (not the Battle/Setup screen)
     resetAll();
+    showView("home");
     return;
   }
 
@@ -3475,86 +4037,122 @@ safeOn("btnNextEnemy", () => {
   // Default: proceed to next enemy
   state.stage += 1;
   spawnNextEnemy();
-});
-safeOn("btnPlayAgain", () => {
+  });
+  safeOn("btnPlayAgain", () => {
   playSfx("sfxClick", 0.45);
   state.modalAction = null;
   const btnNext = $("btnNextEnemy");
   if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
   closeModal();
   resetAll();
-});
+  });
 
-safeOn("btnAttack", () => { playSfx("sfxClick", 0.35); playerAttack(); });
-safeOn("btnSkill", () => { playSfx("sfxClick", 0.35); playerSkill(); });
-safeOn("btnEnd", () => { playSfx("sfxClick", 0.35); playerEndTurn(); });
-safeOn("btnReset", () => { playSfx("sfxClick", 0.35); resetAll(); });
+  safeOn("btnAttack", () => { playSfx("sfxClick", 0.35); playerAttack(); });
+  safeOn("btnSkill", () => { playSfx("sfxClick", 0.35); playerSkill(); });
+  safeOn("btnEnd", () => { playSfx("sfxClick", 0.35); playerEndTurn(); });
+  safeOn("btnReset", () => { playSfx("sfxClick", 0.35); resetAll(); });
 
 // Ability info (click the "i" icon to also print the description into the battle log)
-safeOn("pInfo", () => {
+  safeOn("pInfo", () => {
   playSfx("sfxClick", 0.2);
   const p = state.player;
   if (!p) return;
   const cd = (p.cooldown || 0) > 0 ? `Cooldown: ${p.cooldown} turn(s)` : "Ready";
   log(`ℹ️ ${p.name} — ${p.base.skillName}: ${p.base.skillDesc} (${cd})`, "info");
-});
-safeOn("eInfo", () => {
+  });
+  safeOn("eInfo", () => {
   playSfx("sfxClick", 0.2);
   const e = state.enemy;
   if (!e) return;
   const cd = (e.cooldown || 0) > 0 ? `Cooldown: ${e.cooldown} turn(s)` : "Ready";
   log(`ℹ️ ${e.name} — ${e.base.skillName}: ${e.base.skillDesc} (${cd})`, "info");
-});
+  });
 
-safeOn("btnBattleNow", () => { playSfx("sfxClick", 0.45); resetAll(); });
-safeOn("btnOpenGallery", () => { playSfx("sfxClick", 0.45); renderGallery(); showView("gallery"); });
-safeOn("btnBackHomeFromGallery", () => { playSfx("sfxClick", 0.45); showView("home"); });
-safeOn("btnGalleryToBattle", () => { playSfx("sfxClick", 0.45); resetAll(); });
-safeOn("btnBackHomeFromSetup", () => { playSfx("sfxClick", 0.45); showView("home"); });
-safeOn("btnSetupGallery", () => { playSfx("sfxClick", 0.45); renderGallery(); showView("gallery"); });
-safeOn("btnExitToHome", () => { playSfx("sfxClick", 0.45); showView("home"); });
+  safeOn("btnBattleNow", () => { playSfx("sfxClick", 0.45); resetAll(); });
+  safeOn("btnOpenGallery", () => { playSfx("sfxClick", 0.45); renderGallery(); showView("gallery"); });
+  safeOn("btnBackHomeFromGallery", () => { playSfx("sfxClick", 0.45); showView("home"); });
+  safeOn("btnGalleryToBattle", () => { playSfx("sfxClick", 0.45); resetAll(); });
+  safeOn("btnBackHomeFromSetup", () => { playSfx("sfxClick", 0.45); showView("home"); });
+  safeOn("btnSetupGallery", () => { playSfx("sfxClick", 0.45); renderGallery(); showView("gallery"); });
+  safeOn("btnExitToHome", () => { playSfx("sfxClick", 0.45); showView("home"); });
 
-// Profile
-safeOn("btnHomeProfile", () => { playSfx("sfxClick", 0.45); renderProfile(); showView("profile"); });
-safeOn("btnGameProfile", () => { playSfx("sfxClick", 0.45); renderProfile(); showView("profile"); });
-safeOn("btnShopProfile", () => { playSfx("sfxClick", 0.45); renderProfile(); showView("profile"); });
-safeOn("btnProfileBackHome", () => { playSfx("sfxClick", 0.45); showView("home"); });
+  safeOn("btnOpenShop", () => { playSfx("sfxClick", 0.45); renderShop(); setShopTab("relics"); showView("shop"); });
+  safeOn("btnHomeShop", () => { playSfx("sfxClick", 0.45); renderShop(); setShopTab("relics"); showView("shop"); });
+  safeOn("btnShopBackHome", () => { playSfx("sfxClick", 0.45); showView("home"); });
 
-safeOn("btnSaveProfileName", () => {
-  playSfx("sfxBuy", 0.55);
-  const input = $("profileNameInput");
-  const raw = input ? String(input.value || "") : "";
-  const name = raw.replace(/\s+/g, " ").trim().slice(0, 18);
-  if (!name) {
-    showToast("⚠️ Enter a name first");
-    return;
+  // =========================
+  // PROFILE BUTTONS
+  // =========================
+  safeOn("btnHomeProfile", () => { playSfx("sfxClick", 0.45); openProfile("home"); });
+  safeOn("btnShopProfile", () => { playSfx("sfxClick", 0.45); openProfile("shop"); });
+  safeOn("btnGameProfile", () => { playSfx("sfxClick", 0.45); openProfile("game"); });
+  safeOn("btnProfileBackHome", () => { playSfx("sfxClick", 0.45); showView(_profilePrevView || "home"); });
+
+  // Profile quick navigation
+  safeOn("btnProfileToShop", () => { playSfx("sfxClick", 0.45); renderShop(); setShopTab("relics"); showView("shop"); });
+  safeOn("btnProfileToBattle", () => {
+    playSfx("sfxClick", 0.45);
+    // If profile was opened mid-run, return to game. Otherwise start a fresh run.
+    if ((_profilePrevView || "home") === "game") showView("game");
+    else resetAll();
+  });
+
+  // Cosmetics section mini-nav (scroll + active state)
+  safeOn("cosNavAvatar", () => {
+    playSfx("sfxClick", 0.25);
+    document.getElementById("avatarBlock")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("cosNavAvatar")?.classList.add("miniTabActive");
+    document.getElementById("cosNavFrame")?.classList.remove("miniTabActive");
+  });
+  safeOn("cosNavFrame", () => {
+    playSfx("sfxClick", 0.25);
+    document.getElementById("frameBlock")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("cosNavFrame")?.classList.add("miniTabActive");
+    document.getElementById("cosNavAvatar")?.classList.remove("miniTabActive");
+  });
+  safeOn("btnSaveProfileName", () => {
+    playSfx("sfxBuy", 0.55);
+    const inp = document.getElementById("profileNameInput");
+    state.profileName = inp ? String(inp.value || "").slice(0, 18) : String(state.profileName || "");
+    saveProgress();
+    renderProfileUI();
+    log(`👤 Profile updated${state.profileName ? `: ${state.profileName}` : ""}.`, "good");
+  });
+
+  safeOn("btnRedeemCode", () => { playSfx("sfxClick", 0.45); redeemCodeFlow(); });
+
+  // Redeem reveal modal buttons (claim/close)
+  safeOn("btnRedeemRevealClaim", () => { playSfx("sfxClick", 0.35); closeRedeemRevealModal(); });
+  safeOn("btnRedeemRevealClose", () => { playSfx("sfxClick", 0.25); closeRedeemRevealModal(); });
+
+  // Click outside closes redeem reveal
+  const redeemRevealModal = document.getElementById("redeemRevealModal");
+  if (redeemRevealModal) {
+    redeemRevealModal.addEventListener("click", (e) => {
+      if (e.target === redeemRevealModal) closeRedeemRevealModal();
+    });
   }
-  if (!state.profile) state.profile = { name: "Player", xp: 0, wins: 0, losses: 0, highStage: 0 };
-  state.profile.name = name;
-  saveProgress();
-  updateProfileUI();
-  showToast(`✅ Saved as ${name}`);
-});
 
-safeOn("btnOpenShop", () => { playSfx("sfxClick", 0.45); renderShop(); setShopTab("relics"); showView("shop"); });
-safeOn("btnHomeShop", () => { playSfx("sfxClick", 0.45); renderShop(); setShopTab("relics"); showView("shop"); });
-safeOn("btnShopBackHome", () => { playSfx("sfxClick", 0.45); showView("home"); });
+  // ESC closes redeem reveal if open
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const m = document.getElementById("redeemRevealModal");
+    if (m && m.style.display !== "none") closeRedeemRevealModal();
+  });
+  safeOn("btnShopToBattle", () => { playSfx("sfxClick", 0.45); resetAll(); });
 
-safeOn("btnRedeemCode", () => { playSfx("sfxClick", 0.45); redeemCodeFlow(); });
-safeOn("btnShopToBattle", () => { playSfx("sfxClick", 0.45); resetAll(); });
-
-safeOn("tabShopRelics", () => { playSfx("sfxClick", 0.35); setShopTab("relics"); });
-safeOn("tabShopCards", () => { playSfx("sfxClick", 0.35); setShopTab("cards"); });
+  safeOn("tabShopRelics", () => { playSfx("sfxClick", 0.35); setShopTab("relics"); });
+  safeOn("tabShopCards", () => { playSfx("sfxClick", 0.35); setShopTab("cards"); });
 
 
 
-// Lucky Draw buttons
-safeOn("btnLuckySingle", () => { playSfx("sfxClick", 0.45); doLuckyDraw(1); });
-safeOn("btnLuckyFive", () => { playSfx("sfxClick", 0.45); doLuckyDraw(5); });
-safeOn("btnLuckyClaim", () => { playSfx("sfxBuy", 0.65); claimNextLuckyReward(); });
-safeOn("btnLuckyClose", () => { playSfx("sfxClick", 0.35); closeLuckyModal(); });
+  // Lucky Draw buttons
+  safeOn("btnLuckySingle", () => { playSfx("sfxClick", 0.45); doLuckyDraw(1); });
+  safeOn("btnLuckyFive", () => { playSfx("sfxClick", 0.45); doLuckyDraw(5); });
+  safeOn("btnLuckyClaim", () => { playSfx("sfxBuy", 0.65); claimLuckyRewards(); });
+  safeOn("btnLuckyClose", () => { playSfx("sfxClick", 0.35); closeLuckyModal(); });
 
-safeOn("tabShopLucky", () => { playSfx("sfxClick", 0.35); setShopTab("lucky"); });
+  safeOn("tabShopLucky", () => { playSfx("sfxClick", 0.35); setShopTab("lucky"); });
 
 // Close any open lore tooltips when clicking elsewhere.
 // (We ignore clicks on the info button/tooltip itself.)
@@ -3563,15 +4161,166 @@ function closeAllLoreTooltips(e) {
   document.querySelectorAll('.infoWrap.showLore').forEach((w) => w.classList.remove('showLore'));
 }
 
-document.addEventListener('click', closeAllLoreTooltips);
+  document.addEventListener('click', closeAllLoreTooltips);
+  // =========================
+  // INIT
+  // =========================
+  loadProgress();
+  updateGoldUI();
+  renderPick();
+  renderGallery();
+  renderShop();
+  setShopTab("relics");
+  // apply cosmetics once UI exists
+  applyCosmeticsToBattleUI();
+
+  // If someone already has Legend XP in their save, make sure the Diablo reward exists.
+  if (getRankNameFromXp(state.profileXp) === "Legend" && !state.diabloUnlocked) {
+    unlockDiabloLegendReward();
+  }
+  showView("home");
+}
+
+// Ensure UI is wired even if the script tag is moved (e.g., into <head>).
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootGameUI);
+} else {
+  bootGameUI();
+}
+
+
 // =========================
-// INIT
+// 📖 HOW TO PLAY (Tutorial)
 // =========================
-loadProgress();
-updateGoldUI();
-updateProfileUI();
-renderPick();
-renderGallery();
-renderShop();
-setShopTab("relics");
-showView("home");
+let tutorialStepIndex = 0;
+
+const TUTORIAL_STEPS = [
+  {
+    title: "Welcome!",
+    text: "This is a Card Battler Survival game. Pick a card, fight enemies, earn gold, buy stronger cards and relics to survive longer."
+  },
+  {
+    title: "Normal Attack",
+    text: "Your normal attack deals your card's Damage. It hits Armor first if the enemy has Armor."
+  },
+  {
+    title: "Armor vs HP",
+    text: "Armor (Defense) blocks damage first. If Armor > 0, damage reduces Armor ONLY (no HP overflow in the same hit)."
+  },
+  {
+    title: "Abilities / Skills",
+    text: "Each card has 1 ability. Skills usually have cooldowns (example: cooldown 2 means you must wait turns before using again)."
+  },
+  {
+    title: "Cooldowns",
+    text: "After using a skill, it goes on cooldown. Some Legendary cards use real-time cooldown timers too."
+  },
+  {
+    title: "Cards",
+    text: "Cards have: Damage, Armor, Life, and Ability. Stronger cards can be bought from the Shop using Gold."
+  },
+  {
+    title: "Gold & Shop",
+    text: "Win battles to earn Gold. Spend Gold to buy new playable cards or upgrade your owned cards."
+  },
+  {
+    title: "Relics / Items",
+    text: "Relics give bonuses like lifesteal, more armor cap, reflect damage, and more. Only 1 relic can be equipped."
+  },
+  {
+    title: "Win Condition",
+    text: "Defeat the enemy before your Life hits 0. Keep pushing higher stages and build your strongest setup!"
+  }
+];
+
+function closeTutorial() {
+  const el = document.getElementById("tutorialModal");
+  if (el) el.remove();
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutorialStepIndex];
+  const titleEl = document.getElementById("tutorialTitle");
+  const bodyEl = document.getElementById("tutorialBodyText");
+  const stepEl = document.getElementById("tutorialStepCount");
+
+  if (titleEl) titleEl.textContent = step.title;
+  if (bodyEl) bodyEl.textContent = step.text;
+  if (stepEl) stepEl.textContent = `Step ${tutorialStepIndex + 1} / ${TUTORIAL_STEPS.length}`;
+
+  const prevBtn = document.getElementById("tutorialPrev");
+  const nextBtn = document.getElementById("tutorialNext");
+
+  if (prevBtn) prevBtn.disabled = tutorialStepIndex === 0;
+  if (nextBtn) nextBtn.textContent = tutorialStepIndex === TUTORIAL_STEPS.length - 1 ? "Finish ✅" : "Next ➜";
+}
+
+function openTutorial() {
+  closeTutorial();
+  tutorialStepIndex = 0;
+
+  const wrap = document.createElement("div");
+  wrap.id = "tutorialModal";
+  wrap.className = "modalOverlay";
+
+  wrap.innerHTML = `
+    <div class="modalBox">
+      <div class="modalHeader">
+        <div>
+          <div class="modalTitle">📖 How to Play</div>
+          <div class="modalPill" id="tutorialStepCount">Step 1 / ${TUTORIAL_STEPS.length}</div>
+        </div>
+        <button class="btn btnSoft" id="tutorialClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="tutorialSteps">
+          <div class="tutorialStep">
+            <h4 id="tutorialTitle"></h4>
+            <p id="tutorialBodyText"></p>
+          </div>
+        </div>
+
+        <div class="tutorialNav">
+          <button class="btn btnSoft" id="tutorialPrev">⬅ Back</button>
+          <button class="btn btnPrimary" id="tutorialNext">Next ➜</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(wrap);
+
+  document.getElementById("tutorialClose").onclick = closeTutorial;
+
+  document.getElementById("tutorialPrev").onclick = () => {
+    if (tutorialStepIndex > 0) tutorialStepIndex--;
+    renderTutorialStep();
+  };
+
+  document.getElementById("tutorialNext").onclick = () => {
+    if (tutorialStepIndex < TUTORIAL_STEPS.length - 1) {
+      tutorialStepIndex++;
+      renderTutorialStep();
+    } else {
+      closeTutorial();
+    }
+  };
+
+  // close when clicking outside
+  wrap.addEventListener("click", (e) => {
+    if (e.target === wrap) closeTutorial();
+  });
+
+  renderTutorialStep();
+}
+
+// Hook button
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("#btnHowToPlay").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      try { playSfx("sfxClick", 0.45); } catch(e) {}
+      openTutorial();
+    });
+  });
+});
