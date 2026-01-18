@@ -364,8 +364,31 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
   grid-template-columns: 1fr 1fr;
   gap:14px;
 }
+/*
+  📱 Mobile: keep Player + Enemy cards side-by-side (left/right)
+  On narrow screens this would normally stack; instead we keep 2 columns and
+  allow horizontal scrolling so cards remain readable.
+*/
 @media (max-width: 900px){
-  .fighters{ grid-template-columns: 1fr; }
+  .fighters{
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px; /* room for scrollbar */
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+  .fighterCard{
+    min-width: 280px;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 360px){
+  .fighters{
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+  }
+  .fighterCard{ min-width: 260px; }
 }
 
 .fighterCard{
@@ -542,6 +565,24 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
 }
 .panelTitle h3{ margin:0; font-size:16px; letter-spacing:.2px; }
 
+/* ✅ Battle quick stats (Rank + XP) */
+.battleQuickStats{
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.battleQuickRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.battleQuickLabel{
+  color: var(--muted);
+  font-weight: 900;
+  letter-spacing: .3px;
+}
+
 .tipList{
   margin:10px 0 0;
   padding-left: 18px;
@@ -680,6 +721,27 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
 
 .modalBody{ padding:0 16px 16px; }
 
+/* =========================
+   ⚔️ 1v1 QUICK DUEL PICKER
+   Make sure the card list is scrollable on mobile.
+   ========================= */
+.duelPickScroll{
+  margin-top: 12px;
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px; /* tiny gutter so scrollbar doesn't overlap content */
+  touch-action: pan-y;
+}
+
+.duelPickScroll::-webkit-scrollbar{ width:10px; }
+.duelPickScroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+}
+.duelPickScroll::-webkit-scrollbar-track{ background: transparent; }
+
 .modalText{
   margin:0;
   color: rgba(233,238,255,.78);
@@ -727,6 +789,66 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
 
 /* One-button modal layout */
 .modalActions.single{ grid-template-columns: 1fr; }
+
+/* =========================
+   🧪 POTION PICKER MODAL
+   ========================= */
+.potionModalBox{ width:min(640px, 100%); }
+
+.potionChoices{
+  margin-top: 12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  max-height: min(48vh, 420px);
+  overflow:auto;
+  padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.potionChoice{
+  width:100%;
+  text-align:left;
+  border-radius: 18px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  padding: 12px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+  cursor:pointer;
+  transition: transform .10s ease, background .10s ease, border-color .10s ease;
+}
+
+.potionChoice:hover{
+  transform: translateY(-1px);
+  background: rgba(0,0,0,.28);
+  border-color: rgba(255,255,255,.16);
+}
+
+.potionChoiceLeft{ flex: 1 1 auto; }
+
+.potionChoiceName{
+  color: rgba(255,255,255,.95);
+  text-shadow: 0 2px 6px rgba(0,0,0,.65);
+}
+
+.potionChoiceDesc{
+  color: rgba(233,238,255,.78);
+  line-height: 1.45;
+  font-weight: 750;
+  font-size: 13px;
+}
+
+.potionChoiceRight{
+  flex: 0 0 auto;
+  font-weight: 1000;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
 
 @media (max-width:520px){
   .modalActions{ grid-template-columns: 1fr; }
@@ -911,6 +1033,29 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
   font-weight: 1000;
   letter-spacing: 1.4px;
   color: rgba(255,210,125,.92);
+}
+
+#btnFightBossNow{
+  margin-top: 8px;
+  width: 100%;
+  max-width: 360px;
+  align-self: center;
+}
+
+/* 👑 Story Boss arena background */
+.arenaBossMode{
+  background-image: url('cards/godsbg.png');
+  background-size: cover;
+  background-position: center;
+}
+
+.arenaBossMode::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 20%, rgba(255,255,255,.08), rgba(0,0,0,.55) 62%, rgba(0,0,0,.72));
+  pointer-events:none;
 }
 @keyframes portalSpin{
   from{ transform: rotate(0deg); }
@@ -2203,6 +2348,62 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
   transition: width .28s ease;
 }
 
+/* 👑 Legend reward preview (Diablo) */
+.legendRewardBox{
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+}
+.legendRewardTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.legendRewardTitle{
+  margin-top: 4px;
+  font-weight: 1100;
+  letter-spacing: .4px;
+  font-size: 18px;
+}
+.legendRewardPill{
+  color: rgba(255,210,125,.95);
+  border-color: rgba(255,210,125,.22);
+}
+.legendRewardBody{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  align-items:center;
+}
+@media (max-width: 520px){
+  .legendRewardBody{ grid-template-columns: 1fr; }
+}
+.legendRewardImg{
+  width: 110px;
+  display: none; /* JS shows when unlocked */
+  aspect-ratio: 2 / 3;
+  object-fit: contain;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.25);
+  padding: 8px;
+}
+.legendRewardText{
+  color: rgba(233,238,255,.82);
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+/* When unlocked, show a subtle "earned" glow */
+.legendRewardBox[data-unlocked="1"]{
+  border-color: rgba(125,255,178,.22);
+  box-shadow: 0 0 0 2px rgba(125,255,178,.08) inset;
+}
+
 .profileStatsGrid{
   margin-top:14px;
   display:grid;
@@ -2991,4 +3192,64 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
 }
 @media (max-height: 680px){
   .omenCardImg{ height: 160px; }
+}
+
+
+/* =========================
+   ✅ BOSS BATTLE BUTTON VISIBILITY BOOST
+   ========================= */
+.actionDock .btn{
+  font-size: 16px;
+  font-weight: 1000;
+  letter-spacing: .4px;
+}
+
+.actionDock .btn.big{
+  min-height: 56px;
+}
+
+.actionDock .btn{
+  box-shadow:
+    0 14px 40px rgba(0,0,0,.55),
+    0 0 0 2px rgba(255,255,255,.10) inset,
+    0 0 26px rgba(79,140,255,.12);
+}
+
+.actionDock .btnPrimary{
+  box-shadow:
+    0 18px 46px rgba(0,0,0,.62),
+    0 0 0 2px rgba(255,255,255,.14) inset,
+    0 0 34px rgba(79,140,255,.22);
+}
+
+/* Highlight buttons more during Story Boss mode (Omni arena) */
+.arenaBossMode .actionDock{
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(0,0,0,.55);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+}
+
+.arenaBossMode .actionDock .btn{
+  outline: 2px solid rgba(255,210,125,.22);
+}
+
+/* Strong focus ring for keyboard + mobile accessibility */
+.actionDock .btn:focus-visible{
+  outline: 3px solid rgba(255,210,125,.90);
+  outline-offset: 3px;
+}
+
+/* Optional: pulse effect to guide the player on boss fight start */
+@keyframes bossBtnPulse{
+  0%   { transform: translateY(0) scale(1); filter: brightness(1); }
+  50%  { transform: translateY(-1px) scale(1.02); filter: brightness(1.12); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+.arenaBossMode .actionDock .btnPrimary{
+  animation: bossBtnPulse 1.15s ease-in-out infinite;
 }
