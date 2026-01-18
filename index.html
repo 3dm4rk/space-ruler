@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cosmic Card Wars</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 🏅 RANK UP OVERLAY (animation) -->
+  <div id="rankUpOverlay" class="rankUpOverlay" style="display:none;">
+    <div class="rankUpFlare"></div>
+    <div class="rankUpCard">
+      <div class="rankUpTop">
+    <button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+
+        <div class="rankUpTitle">🏅 RANK UP!</div>
+        <div class="rankUpSub" id="rankUpSub">Rookie → Bronze</div>
+      </div>
+      <div class="rankUpBadge" id="rankUpBadge">Bronze</div>
+      <div class="rankUpUnlocks" id="rankUpUnlocks"></div>
+      <div class="rankUpHint">New cosmetics may have unlocked ✨</div>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <div id="home" class="screen">
+    <div class="wrap hero">
+      <div class="heroCard">
+        <div class="heroTop">
+          <div class="brand">
+            <div class="brandDot"></div>
+            <span class="brandName">Cosmic Card Wars</span>
+          </div>
+          <div class="heroTopRight">
+            <span class="pill" id="homeGoldTag">Gold: 0</span>
+            <button class="btn btnGhost" id="btnHomeProfile">👤 Profile</button>
+            <button class="btn btnGhost" id="btnHomeShop">🛒 Shop</button>
+            <button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+
+          </div>
+        </div>
+
+        <h1 class="heroTitle">Choose your Champion. <span class="glow">Defy the Void.</span></h1>
+        <p class="heroSub">
+          Endless enemies. Your HP and Defense carry over. Earn gold. Buy relics + upcoming cards.
+        </p>
+
+        <div class="heroActions">
+          <button class="btn btnPrimary" id="btnBattleNow">⚔️ Battle Now</button>
+          <button class="btn btnGhost" id="btnOpenGallery">🃏 Gallery</button>
+          <button class="btn btnSoft" id="btnStoryMode">📜 Story Mode</button>
+        </div>
+
+        <!-- ✅ Missions (text only guide) -->
+        <div class="missionText" id="missionText"></div>
+
+        <div class="heroHints">
+          <div class="hint">🛡️ Defense absorbs damage first</div>
+          <div class="hint">🪬 Relics can be bought</div>
+          <div class="hint">🛒 Shop = relics + future cards</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div id="profile" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Profile</h2>
+            <span class="pill" id="profileRankPill">Rank: Rookie</span>
+            <span class="pill" id="profileXpPill">XP: 0</span>
+          </div>
+          <p class="muted" style="margin:6px 0 0;">Your progress is saved on this device.</p>
+        </div>
+
+        <div class="topbarActions">
+          <button class="btn btnSoft" id="btnProfile1v1">⚔️ 1v1</button>
+          <button class="btn btnSoft" id="btnProfileSecrets">🤫 Secrets</button>
+          <button class="btn btnGhost" id="btnProfileToBattle">⚔️ Battle</button>
+          <button class="btn btnGhost" id="btnProfileToShop">🛒 Shop</button>
+          <button class="btn btnGhost" id="btnProfileBackHome">🏠 Home</button>
+        </div>
+      </div>
+
+      <div class="profileCard">
+        <div class="profileTop">
+          <div>
+            <div class="muted" style="font-weight:900;letter-spacing:.3px;">PLAYER NAME</div>
+            <div class="profileNameRow">
+              <input id="profileNameInput" class="profileInput" placeholder="Your name" maxlength="18" />
+              <button class="btn btnPrimary" id="btnSaveProfileName">Save</button>
+            </div>
+            <div class="muted" style="margin-top:6px;">Tip: this is your account label (doesn’t rename the fighter card).</div>
+          </div>
+          <div class="profileRight">
+            <div class="profileAvatar" id="profileAvatar">✨</div>
+            <div class="rankBadge" id="rankBadge">Rookie</div>
+          </div>
+        </div>
+
+        <div class="rankProgress">
+          <div class="rankProgressTop">
+            <div class="muted" id="rankProgressLabel">Next rank: —</div>
+            <div class="muted" id="rankProgressNums">0 / 0</div>
+          </div>
+          <div class="rankBar"><div class="rankBarFill" id="rankBarFill"></div></div>
+        </div>
+
+        <!-- 👑 Legend Reward (preview + unlock status) -->
+        <div class="legendRewardBox" id="legendRewardBox" data-unlocked="0">
+          <div class="legendRewardTop">
+            <div>
+              <div class="muted" style="font-weight:900;letter-spacing:.3px;">LEGEND REWARD</div>
+              <div class="legendRewardTitle">Diablo</div>
+            </div>
+            <span class="pill legendRewardPill">Legend</span>
+          </div>
+          <div class="legendRewardBody">
+            <img id="legendRewardImg" class="legendRewardImg" src="cards/diablo.png" alt="Diablo reward" />
+            <div class="legendRewardText" id="legendRewardText">Reach <b>Legend</b> rank to unlock <b>Diablo</b>.</div>
+          </div>
+        </div>
+
+        <div class="profileStatsGrid">
+          <div class="statCard">
+            <div class="statLabel">Wins</div>
+            <div class="statValue" id="statWins">0</div>
+          </div>
+          <div class="statCard">
+            <div class="statLabel">Losses</div>
+            <div class="statValue" id="statLosses">0</div>
+          </div>
+          <div class="statCard">
+            <div class="statLabel">Best Streak</div>
+            <div class="statValue" id="statBestStreak">0</div>
+          </div>
+          <div class="statCard">
+            <div class="statLabel">Highest Stage</div>
+            <div class="statValue" id="statHighStage">0</div>
+          </div>
+        </div>
+
+        <!-- 🎨 Cosmetics (unlock by rank) -->
+        <div class="cosmeticsSection">
+          <div class="cosmeticsHeader">
+            <h3 class="cosmeticsTitle">Cosmetics</h3>
+            <div class="cosmeticsHeaderRight">
+              <span class="pill">Unlock by rank</span>
+              <div class="cosmeticsNav" aria-label="Cosmetics navigation">
+                <button class="miniTab miniTabActive" id="cosNavAvatar" type="button">✨ Avatar</button>
+                <button class="miniTab" id="cosNavFrame" type="button">🖼️ Frame</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cosmeticsBlock" id="avatarBlock">
+            <div class="muted" style="font-weight:900;letter-spacing:.3px;">AVATAR</div>
+            <div class="cosmeticsGrid" id="avatarGrid"></div>
+          </div>
+
+          <div class="cosmeticsBlock" id="frameBlock" style="margin-top:12px;">
+            <div class="muted" style="font-weight:900;letter-spacing:.3px;">CARD FRAME</div>
+            <div class="cosmeticsGrid" id="frameGrid"></div>
+            <div class="muted" style="margin-top:8px;">Frames apply to your player card in battle.</div>
+          </div>
+        </div>
+
+        <div class="profileFoot">
+          <div class="muted">Equipped relic:</div>
+          <div class="profileRelic" id="profileRelic">None</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SHOP -->
+  <div id="shop" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Shop</h2>
+            <span class="pill" id="shopGoldTag">Gold: 0</span>
+          </div>
+          <p class="muted">Buy relics (auto-equip + saved) and upcoming cards (Owned for later).</p>
+
+          <!-- ✅ Tabs -->
+          <div class="shopTabs">
+            <button class="tabBtn tabActive" id="tabShopRelics">🪬 Relics</button>
+            <button class="tabBtn" id="tabShopCards">🃏 Upcoming Cards</button>
+            <button class="tabBtn" id="tabShopPotions">🧪 Potions</button>
+            <button class="tabBtn" id="tabShopLucky">🎰 Lucky Draw</button>
+          </div>
+        </div>
+
+        <div class="topbarActions">
+          <button class="btn btnSoft" id="btnRedeemCode">🎁 Redeem Code</button>
+          <button class="btn btnGhost" id="btnShopProfile">👤 Profile</button>
+          <button class="btn btnGhost" id="btnShopBackHome">🏠 Home</button>
+          <button class="btn btnGhost" id="btnShopToBattle">⚔️ Battle</button>
+        </div>
+      </div>
+
+      <!-- Relics tab -->
+      <div id="shopRelicsWrap">
+        <div id="shopRelicGrid" class="shopGrid"></div>
+      </div>
+
+      <!-- Cards tab -->
+      <div id="shopCardsWrap" style="display:none;">
+        <div id="shopGrid" class="shopGrid"></div>
+      </div>
+
+      <!-- Potions tab -->
+      <div id="shopPotionsWrap" style="display:none;">
+        <div id="shopPotionGrid" class="shopGrid"></div>
+      </div>
+
+      <!-- Lucky Draw tab -->
+      <div id="shopLuckyWrap" style="display:none;">
+        <div class="luckyWrap">
+          <div class="luckyHeader">
+            <div>
+              <h3 class="luckyTitle">🎰 Lucky Draw</h3>
+              <p class="muted" style="margin:6px 0 0;">Spin for rewards. 1% chance to pull the <b>new entity</b> card.</p>
+            </div>
+            <div class="luckyCosts">
+              <span class="pill">Single: 2000 Gold</span>
+              <span class="pill">5x: 10000 Gold</span>
+            </div>
+          </div>
+
+          <div class="luckyMachine" id="luckyMachine">
+            <div class="luckyWheel" id="luckyWheel">
+              <div class="luckyGlow"></div>
+              <div class="luckyCenter">
+                <img class="luckyWheelCard" src="cards/entity.png" alt="Best reward card" />
+              </div>
+            </div>
+            <div class="luckyActions">
+              <button class="btn btnPrimary big" id="btnLuckySingle">🎟️ Draw 1</button>
+              <button class="btn btnSoft big" id="btnLuckyFive">🎟️ Draw 5</button>
+            </div>
+            <div class="luckyOdds">
+              <div class="oddsRow"><span class="badge">1%</span> Card (Entity)</div>
+              <div class="oddsRow"><span class="badge">99%</span> Gold Reward</div>
+              <div class="oddsRow muted" style="margin-top:6px;">
+                Gold pool: 1 - 100
+              </div>
+            </div>
+          </div>
+
+          <div class="luckyResults" id="luckyResults"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- GALLERY -->
+  <div id="gallery" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Gallery</h2>
+            <span class="pill">All Fighters</span>
+          </div>
+          <p class="muted">See full card stats + skills.</p>
+        </div>
+
+        <div class="topbarActions">
+          <button class="btn btnPrimary" id="btnGalleryToBattle">⚔️ Battle</button>
+          <button class="btn btnGhost" id="btnBackHomeFromGallery">🏠 Home</button>
+        </div>
+      </div>
+
+      <div id="galleryGrid" class="grid"></div>
+    </div>
+  </div>
+
+  <!-- STORY MODE -->
+  <div id="story" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Story Mode</h2>
+            <span class="pill" id="storyPagePill">Page 1</span>
+          </div>
+          <p class="muted" id="storySubtitle">The origin of Cosmo… and why the universe fights for glory.</p>
+        </div>
+        <div class="topbarActions">
+          <button class="btn btnGhost" id="btnStoryBackHome">🏠 Home</button>
+        </div>
+      </div>
+
+      <div class="storyCard" id="storyCard">
+        <div class="storyTitle" id="storyTitle">—</div>
+        <div class="storyBody" id="storyBody">—</div>
+
+        <!-- 🌌 Boss preview (shows only on final page) -->
+        <div class="storyBossWrap" id="storyBossWrap" style="display:none;">
+          <div class="storyBossPortal" aria-hidden="true"></div>
+          <div class="storyBossInner">
+            <div class="storyBossTag">⚔️ BOSS FIGHT</div>
+            <div class="storyBossTitle">GOD OF ALL GODS</div>
+            <div class="storyBossSub" id="storyBossSub">Complete Mission 6 to unlock</div>
+            <button class="btn btnPrimary big" id="btnFightBossNow" disabled>⚔️ Fight Boss Now</button>
+          </div>
+        </div>
+
+        <div class="storyFooter">
+          <button class="btn btnGhost" id="btnStoryPrev">⬅️ Back</button>
+          <button class="btn btnPrimary" id="btnStoryNext">Next ➡️</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETUP -->
+  <div id="setup" class="screen" style="display:none;">
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="titleRow">
+            <h2 class="pageTitle">Choose Your Fighter</h2>
+            <span class="pill">Tap a card to start</span>
+          </div>
+          <p class="muted">Your stats carry through the entire run.</p>
+        </div>
+
+        <div class="topbarActions">
+          <button class="btn btnGhost" id="btnSetupGallery">🃏 Gallery</button>
+          <button class="btn btnGhost" id="btnBackHomeFromSetup">🏠 Home</button>
+        </div>
+      </div>
+
+      <div id="pickGrid" class="grid"></div>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" class="screen" style="display:none;">
+    <div class="wrap">
+
+      <div class="gameTop">
+        <div class="gameTopLeft">
+          <div class="titleRow">
+            <h2 class="pageTitle">Battle Arena</h2>
+            <span class="pill" id="stageTag">Stage: 1</span>
+            <span class="pill" id="roundTag">Round: 1</span>
+            <span class="pill" id="turnTag">Turn: Player</span>
+            <span class="pill" id="enemyPassiveTag">Enemy Passive: 35%</span>
+            <span class="pill" id="enemyAiTag">Enemy AI: Aggressive</span>
+            <span class="pill" id="goldTag">Gold: 0</span>
+          </div>
+          <p class="muted">Relics bought from shop auto-equip and stay for future runs.</p>
+        </div>
+
+        <div class="gameTopActions">
+          <button class="btn btnGhost" id="btnOpenShop">🛒 Shop</button>
+            <button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+
+          <button class="btn btnGhost" id="btnGameProfile">👤 Profile</button>
+          <button class="btn btnGhost" id="btnReset">🔁 Restart Run</button>
+          <button class="btn btnGhost" id="btnExitToHome">🏠 Home</button>
+        </div>
+      </div>
+
+      <div class="gameGrid">
+        <div class="arenaCard" id="arenaCard">
+          <div class="fighters">
+
+            <div class="fighterCard player" id="playerCard">
+              <div class="fighterHeader">
+                <div class="fighterName">
+                  <span class="roleTag rolePlayer">PLAYER</span>
+                  <h3 id="pName">Player</h3>
+                </div>
+                <div class="skillTools">
+                  <span class="skillPill" id="pSkillTag">Skill</span>
+                  <button class="infoBtn" id="pInfo" type="button" aria-label="Player ability info">i</button>
+                </div>
+              </div>
+
+              <div class="imgFrame" id="pFrame">
+                <img id="pImg" class="cardImg" src="" alt="Player card"/>
+              </div>
+
+              <div class="bars">
+                <div class="barRow">
+                  <div class="barLabel">
+                    <span>HP</span>
+                    <span id="pHP" class="barNum">0/0</span>
+                  </div>
+                  <div class="bar">
+                    <div class="barFill hp" id="pHpBar"></div>
+                  </div>
+                </div>
+
+                <div class="barRow">
+                  <div class="barLabel">
+                    <span>Defense</span>
+                    <span id="pShield" class="barNum">0</span>
+                  </div>
+                  <div class="bar">
+                    <div class="barFill shield" id="pShieldBar"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chips">
+                <span class="chip">ATK: <b id="pATK">0</b></span>
+                <span class="chip">DEF: <b id="pDEF">0</b></span>
+                <span class="chip">Status: <b id="pStatus">None</b></span>
+              </div>
+            </div>
+
+            <div class="fighterCard enemy" id="enemyCard">
+              <div class="fighterHeader">
+                <div class="fighterName">
+                  <span class="roleTag roleEnemy">ENEMY</span>
+                  <h3 id="eName">Enemy</h3>
+                </div>
+                <div class="skillTools">
+                  <span class="skillPill" id="eSkillTag">Skill</span>
+                  <button class="infoBtn" id="eInfo" type="button" aria-label="Enemy ability info">i</button>
+                </div>
+              </div>
+
+              <div class="imgFrame" id="eFrame">
+                <img id="eImg" class="cardImg" src="" alt="Enemy card"/>
+              </div>
+
+              <div class="bars">
+                <div class="barRow">
+                  <div class="barLabel">
+                    <span>HP</span>
+                    <span id="eHP" class="barNum">0/0</span>
+                  </div>
+                  <div class="bar">
+                    <div class="barFill hp" id="eHpBar"></div>
+                  </div>
+                </div>
+
+                <div class="barRow">
+                  <div class="barLabel">
+                    <span>Defense</span>
+                    <span id="eShield" class="barNum">0</span>
+                  </div>
+                  <div class="bar">
+                    <div class="barFill shield" id="eShieldBar"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chips">
+                <span class="chip">ATK: <b id="eATK">0</b></span>
+                <span class="chip">DEF: <b id="eDEF">0</b></span>
+                <span class="chip">Status: <b id="eStatus">None</b></span>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="actionDock">
+            <button class="btn btnPrimary big" id="btnAttack">⚔️ Attack</button>
+            <button class="btn btnSoft big" id="btnSkill">✨ Use Skill</button>
+            <button class="btn btnGhost big" id="btnEnd">⏭️ End Turn</button>
+            <button class="btn btnGhost big" id="btnPotion">🧪 Use Potion</button>
+          </div>
+        </div>
+
+        <div class="sidePanel">
+          <!-- ✅ Battle quick stats (replaces Quick Guide) -->
+          <div class="panelCard">
+            <div class="panelTitle">
+              <h3>Player</h3>
+              <span class="pill">Rank & XP</span>
+            </div>
+
+            <div class="battleQuickStats">
+              <div class="battleQuickRow">
+                <span class="battleQuickLabel">Rank</span>
+                <span class="pill" id="battleRankPill">Rank: Rookie</span>
+              </div>
+              <div class="battleQuickRow">
+                <span class="battleQuickLabel">XP</span>
+                <span class="pill" id="battleXpPill">XP: 0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panelCard">
+            <div class="panelTitle">
+              <h3>Battle Log</h3>
+              <span class="pill">Live</span>
+            </div>
+            <div class="log" id="log"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SURVIVAL RESULT MODAL -->
+  <div id="resultModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox">
+      <div class="modalHeader">
+        <div class="modalTitle" id="resultTitle">Victory!</div>
+        <div class="modalPill" id="resultStage">Stage 1</div>
+      </div>
+
+      <div class="modalBody">
+        <p class="modalText" id="resultText">You defeated the enemy!</p>
+
+        <!-- ✅ Defeat modal cleanup: removed Gold / Total / HP / Shield blocks -->
+
+        <div class="modalHint" id="modalHint">Next enemy incoming...</div>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn btnSoft big" id="btnNextEnemy">⚔️ Next Enemy</button>
+        <button class="btn btnGhost big" id="btnPlayAgain">🔁 Restart Run</button>
+      </div>
+    </div>
+
+	  </div>
+
+
+  <!-- 🎰 LUCKY DRAW MODAL -->
+  <div id="luckyModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox luckyModalBox">
+      <div class="modalHeader">
+        <div class="modalTitle" id="luckyModalTitle">🎰 Lucky Draw</div>
+        <div class="modalPill" id="luckyModalPill">Result</div>
+      </div>
+      <div class="modalBody">
+        <!-- ✅ upgraded: multi-draw progress + mini reveals -->
+        <div class="luckyProgress" id="luckyProgress" style="display:none;">
+          <span class="pill" id="luckyProgressPill">1 / 5</span>
+          <span class="muted" id="luckyProgressText">Multi draw</span>
+        </div>
+
+        <div class="luckyReveal">
+          <div class="luckyCard" id="luckyCardReveal">
+            <div class="luckyCardTop">
+              <div class="luckyCardName" id="luckyRewardName">Reward</div>
+              <div class="pill" id="luckyRewardRarity">Common</div>
+            </div>
+            <div class="luckyCardBody" id="luckyRewardBody">
+              <div class="muted">Your reward appears here.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="luckyMultiStrip" id="luckyMultiStrip" style="display:none;"></div>
+
+        <p class="modalHint" id="luckyModalHint">Tap claim to add it to your account.</p>
+      </div>
+      <div class="modalActions">
+        <button class="btn btnPrimary big" id="btnLuckyClaim">✨ Claim</button>
+        <button class="btn btnGhost big" id="btnLuckyClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🎁 REDEEM REVEAL MODAL (shows card image + ability after redeem) -->
+  <div id="redeemRevealModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox redeemRevealBox">
+      <div class="modalHeader">
+        <div class="modalTitle" id="redeemRevealTitle">🎁 Code Redeemed!</div>
+        <div class="modalPill" id="redeemRevealPill">Unlocked</div>
+      </div>
+
+      <div class="modalBody">
+        <p class="modalText" id="redeemRevealText">You unlocked a new card!</p>
+
+        <div class="redeemRevealHero">
+          <div class="redeemCardFrame">
+            <img id="redeemRevealImg" src="" alt="Card" />
+            <div class="redeemShine"></div>
+          </div>
+
+          <div class="redeemRevealInfo">
+            <div class="redeemRevealName" id="redeemRevealName">Card Name</div>
+            <div class="redeemRevealStats" id="redeemRevealStats">ATK 0 • DEF 0 • HP 0</div>
+
+            <div class="redeemRevealAbility">
+              <div class="redeemRevealAbilityName" id="redeemRevealAbilityName">Ability</div>
+              <div class="redeemRevealAbilityDesc" id="redeemRevealAbilityDesc">Ability description…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="redeemCodeLine" id="redeemRevealCodeLine">Code:</div>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn btnPrimary big" id="btnRedeemRevealClaim">✨ CLAIM</button>
+        <button class="btn btnGhost big" id="btnRedeemRevealClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🌌 COSMO REVELATION UNLOCK MODAL -->
+  <div id="cosmoRevealModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox cosmoRevealBox">
+      <div class="modalHeader">
+        <div class="modalTitle">🌌 Cosmo Revelation</div>
+        <div class="modalPill">Unlocked</div>
+      </div>
+      <div class="modalBody">
+        <p class="modalText" id="cosmoRevealText">A forbidden page of the cosmos has been revealed…</p>
+
+        <div class="cosmoRevealHero">
+          <div class="cosmoCardFrame">
+            <img id="cosmoRevealImg" src="" alt="Cosmo card" />
+            <div class="redeemShine"></div>
+          </div>
+          <div class="cosmoRevealLore" id="cosmoRevealLore">—</div>
+        </div>
+      </div>
+      <div class="modalActions single">
+        <button class="btn btnPrimary big" id="btnCosmoGoNow">Go Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🤫 SECRETS: NON-SHOP CARD UPGRADE MODAL -->
+  <div id="secretsModal" class="modalOverlay" style="display:none;">
+    <div class="modalBox secretsModalBox">
+      <div class="modalHeader">
+        <div class="modalTitle">🤫 Secrets</div>
+        <div class="modalPill" id="secretsModalPill">Upgrade non-shop cards</div>
+      </div>
+      <div class="modalBody">
+        <div class="secretsList" id="secretsList"></div>
+      </div>
+      <div class="modalActions single">
+        <button class="btn btnGhost big" id="btnSecretsClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  
+ <!-- ✅ SFX -->
+  <audio id="sfxClick" src="sfx/click.mp3" preload="auto"></audio>
+  <audio id="sfxAttack" src="sfx/attack.mp3" preload="auto"></audio>
+  <audio id="sfxSkill" src="sfx/skill.mp3" preload="auto"></audio>
+ <audio id="sfxEnd" src="sfx/endturn.mp3" preload="auto"></audio>
+ <audio id="sfxWin" src="sfx/win.mp3" preload="auto"></audio>
+ <audio id="sfxLose" src="sfx/lose.mp3" preload="auto"></audio>
+ <audio id="sfxBuy" src="sfx/buy.mp3" preload="auto"></audio>
+ 
+  
+    <audio id="sfxDraw" src="sfx/draw.mp3" preload="auto"></audio>
+  <audio id="sfxJackpot" src="sfx/jackpot.mp3" preload="auto"></audio>
+<script src="game.js"></script>
+</body>
+</html>
