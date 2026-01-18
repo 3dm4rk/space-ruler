@@ -170,7 +170,7 @@ function formatPotionCd() {
   return t > 0 ? `${t} turns` : "Ready";
 }
 
-function setPotionCooldown() {
+function setPotionCooldown(turns = 10) {
   state.potionCooldownTurns = POTION_COOLDOWN_TURNS;
   saveProgress();
 }
@@ -700,22 +700,22 @@ const UNLOCKABLE_CARD_DEFS = {
     def: 4,
     hp: 10,
     skillName: "Reality Lock",
-    skillDesc: "Deal 4 damage, remove ALL enemy armor, apply Reboot Seal (2 turns) — enemy cannot heal. (CD 3)",
+    skillDesc: "Deal 30 damage, remove ALL enemy armor, apply Reboot Seal (1 turns) — enemy cannot heal. (CD 3)",
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
-      applyDamage(foe, 4, { silent: true, source: "skill", });
+      applyDamage(foe, 30, { silent: true, source: "skill", });
 
       const removed = foe.shield;
       foe.shield = 0;
 
       foe.rebootSeal = Math.max(foe.rebootSeal || 0, 2);
 
-      me.cooldown = 3;
+      me.cooldown = 1;
       updateUI();
       return {
         ok: true,
-        msg: `${me.name} uses Reality Lock! 4 dmg, removed ${removed} armor, Reboot Seal (2 turns).`
+        msg: `${me.name} uses Reality Lock! 30 dmg, removed ${removed} armor, Reboot Seal (1 turns).`
       };
     }
   },
@@ -809,30 +809,52 @@ astroWitch: {
     def: 10,
     hp: 12,
     skillName: "Null Hymn",
-    skillDesc: "Silence enemy (no skill) for 2 turns and deal damage based on enemy HP+Shield (40%). Cooldown: 5 minutes.",
+    skillDesc: "Silence enemy (no skill) for 2 turns and deal damage based on enemy HP+Shield (40%) + enemy current ATK + HP + DEF (stackable every cast). Cooldown: 2 turns.",
     skill: (me, foe) => {
-      if (!isSkillReady(me)) {
-        return { ok: false, msg: `Skill is on cooldown (${formatSkillCd(me)}).` };
-      }
-      // Silence
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      // Silence enemy for 2 turns
       foe.silenced = Math.max(foe.silenced || 0, 2);
 
-      // Damage based on enemy current HP + Shield
+      // Base damage: 40% of enemy current HP + Shield
       const total = (foe.hp || 0) + (foe.shield || 0);
-      const dmg = Math.max(1, Math.ceil(total * 0.40));
+      const baseDmg = Math.max(1, Math.ceil(total * 0.40));
 
-      // Mark as skill damage so Yrol passive can detect it
-      applyDamage(foe, dmg, { silent: true, source: "skill", });
+      // Extra bonus damage based on enemy current stats (recalculated each cast)
+      const bonusLife = Math.max(0, Number(foe.hp || 0) || 0);
+      const bonusDef  = Math.max(0, Number(foe.shield || 0) || 0);
+      const bonusAtk  = Math.max(0, Number(foe.atk || 0) || 0);
 
-      // Start 5-minute real-time cooldown
-      setSkillCooldown(me, 5 * 60 * 1000);
+      const dmg = baseDmg + bonusLife + bonusDef + bonusAtk;
+
+      // ✅ STACKING BUFF (requested): Abarskie gains the enemy's current stats each cast
+      // This makes the "stackable every cast" part visible on Abarskie's card.
+      // +Damage/ATK
+      me.atk = Math.max(0, Number(me.atk || 0) || 0) + bonusAtk;
+
+      // +Life/HP (increase max HP and also heal that amount, capped)
+      me.maxHp = Math.max(1, Number(me.maxHp || 1) || 1) + bonusLife;
+      me.hp = Math.min(me.maxHp, Math.max(0, Number(me.hp || 0) || 0) + bonusLife);
+
+      // +Defense/Armor (increase shield cap and current shield, then sync DEF)
+      me.shieldCap = Math.max(0, Number(me.shieldCap || me.shield || me.def || 0) || 0) + bonusDef;
+      me.shield = Math.min(getShieldCap(me), Math.max(0, Number(me.shield || 0) || 0) + bonusDef);
+      me.def = me.shield;
+
+      // Mark as skill damage (for passives like Yrol)
+      applyDamage(foe, dmg, { silent: true, source: "skill", attacker: me, attackerName: me.name });
+
+      // Cooldown: 2 turns (this game uses +1 convention: CD 2 -> set to 3)
+      me.cooldown = 3;
 
       updateUI();
-      return { ok: true, msg: `${me.name} uses Null Hymn! Enemy is Silenced (2 turns) and takes ${dmg} damage.` };
-    },
-    legendaryCooldownMs: 5 * 60 * 1000
-  }
-,
+      return {
+        ok: true,
+        msg: `${me.name} uses Null Hymn! Enemy is Silenced (2 turns) and takes ${dmg} damage. ` +
+             `Abarskie absorbs power: +${bonusAtk} DMG, +${bonusLife} Life, +${bonusDef} DEF.`
+      };
+    }
+  },
 
   // =========================
   // ✅ NEW CARDS (SHOP UPDATE)
@@ -846,6 +868,8 @@ astroWitch: {
     atk: 6,
     def: 5,
     hp: 5,
+    // ✅ Mission-gated enemy card (do not show/spawn until unlocked)
+    secret: true,
     skillName: "Armor Break Roulette",
     skillDesc: "Remove ALL enemy armor, then 50% chance to deal 25 damage, otherwise 5 damage. (CD 1) Passive: On ability kill, permanently gain +6 DMG, +5 Armor, +5 Life (CD 3).",
     skill: (me, foe) => {
@@ -1083,7 +1107,219 @@ astroWitch: {
       return { ok: true, msg: healBlocked ? `${me.name} unleashes Hellfire! 12 dmg, +${gained} Armor, healing blocked.` : `${me.name} unleashes Hellfire! 12 dmg, +${gained} Armor, +7 HP.` };
     }
   },
+
+  // 🕳️ MISSION 4 REWARD (not buyable) — revealed after defeating Entity
+  antiMatter: {
+    id: "antiMatter",
+    name: "Anti-Matter",
+    img: "cards/anti-matter.png",
+    atk: 12,
+    def: 10,
+    hp: 20,
+    secret: true,
+    skillName: "Genesis Collapse",
+    skillDesc: "Generate random 50–2000 TRUE magic damage (penetrates armor). Convert the generated number into Life + Armor (NOT stackable). (Cooldown: 15 turns)",
+    skill: (me, foe) => {
+      if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      const roll = randInt(50, 2000);
+
+      // TRUE magic damage: bypass armor
+      applyDamage(foe, roll, {
+        silent: true,
+        source: "skill",
+        damageType: "true",
+        attacker: me,
+        attackerName: me.name
+      });
+
+      // ✅ NON-STACKABLE CONVERT:
+      // The rolled number becomes Anti-Matter's bonus Life/Armor for this battle,
+      // but it does NOT accumulate across multiple casts.
+      if (me._amBaseMaxHp == null) {
+        me._amBaseMaxHp = Number(me.maxHp || 1) || 1;
+        me._amBaseShield = Number(me.shield || 0) || 0;
+        me._amBaseShieldCap = Number(me.shieldCap || me._amBaseShield || 0) || 0;
+      }
+
+      // Life becomes (base + roll)
+      const healBlocked = !canHeal(me);
+      me.maxHp = me._amBaseMaxHp + roll;
+      if (!healBlocked) {
+        me.hp = me.maxHp;
+      } else {
+        me.hp = Math.min(me.maxHp, Number(me.hp || 0) || 0);
+      }
+
+      // Armor/DEF becomes (base + roll) — set directly so it still works under Time Lock
+      const armorBlocked = !canGainArmor(me);
+      me.shieldCap = me._amBaseShieldCap + roll;
+      me.shield = me._amBaseShield + roll;
+      me.def = me.shield;
+
+      // 15-turn cooldown → set to 16 (same convention: CD 2 uses 3)
+      me.cooldown = 16;
+      updateUI();
+
+      return {
+        ok: true,
+        msg: `🕳️ ${me.name} collapses genesis! ${roll} TRUE damage. ` +
+             `${healBlocked ? "Healing blocked" : `HP set to ${me.hp}/${me.maxHp}`}. ` +
+             `Armor/DEF set to ${me.shield}${armorBlocked ? " (ignored Time Lock)" : ""}.`
+      };
+    }
+  },
+
+  // 🐉 MISSION 5 TARGET (Enemy-only)
+  // NOTE: Actual stats are randomized per spawn via buildAwakenedMonster().
+  awakenedMonster: {
+    id: "awakenedMonster",
+    name: "Awakened Monster",
+    img: "cards/am.png",
+    atk: 1200,
+    def: 1200,
+    hp: 1200,
+    secret: true,
+    enemyOnly: true,
+    skillName: "Abyss Awakening",
+    skillDesc: "Generate random 200–2000 damage. Convert the generated number into Life + Defense (not stackable). (CD 3)",
+    skill: (me, foe) => {
+      if ((me.cooldown || 0) > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+
+      const roll = randInt(200, 2000);
+      applyDamage(foe, roll, { silent: true, source: "skill", attacker: me, attackerName: me.name });
+
+      // NON-STACKABLE convert (same style as Anti-Matter):
+      if (me._awBaseMaxHp == null) {
+        me._awBaseMaxHp = Number(me.maxHp || 1) || 1;
+        me._awBaseShield = Number(me.shield || 0) || 0;
+        me._awBaseShieldCap = Number(me.shieldCap || me._awBaseShield || 0) || 0;
+      }
+
+      const healBlocked = !canHeal(me);
+      me.maxHp = me._awBaseMaxHp + roll;
+      if (!healBlocked) {
+        me.hp = me.maxHp;
+      } else {
+        me.hp = Math.min(me.maxHp, Number(me.hp || 0) || 0);
+      }
+
+      const armorBlocked = !canGainArmor(me);
+      me.shieldCap = me._awBaseShieldCap + roll;
+      me.shield = me._awBaseShield + roll;
+      me.def = me.shield;
+
+      me.cooldown = 4;
+      updateUI();
+
+      return {
+        ok: true,
+        msg: `👿 ${me.name} awakens: ${roll} damage. ` +
+             `${healBlocked ? "Healing blocked" : `HP set to ${me.hp}/${me.maxHp}`}. ` +
+             `Defense set to ${me.shield}${armorBlocked ? " (Time Lock blocked armor gain)" : ""}.`
+      };
+    }
+  },
 };
+
+// 👑 STORY BOSS (not in gallery pool; spawned directly)
+const OMNI_BOSS_ID = "omniGod";
+
+// 🐉 Mission 5 boss builder (randomized stats per spawn)
+function buildAwakenedMonster() {
+  const hp = randInt(300, 2000);
+  const atk = randInt(300, 2000);
+  const def = randInt(300, 2000);
+
+  // Start from the definition (keeps skill/lore text consistent)
+  const base = (UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS.awakenedMonster)
+    ? UNLOCKABLE_CARD_DEFS.awakenedMonster
+    : { id: "awakenedMonster", name: "Awakened Monster", img: "cards/am.png" };
+
+  return {
+    ...base,
+    atk,
+    def,
+    hp
+  };
+}
+
+function buildOmniBoss() {
+  const hp = randInt(1000, 5000);
+  const atk = randInt(1000, 5000);
+  const def = randInt(1000, 5000);
+  return {
+    id: OMNI_BOSS_ID,
+    name: "Omni",
+    img: "cards/omni.png",
+    atk,
+    def,
+    hp,
+    skillName: "Gods Justice",
+    skillDesc: "Random 500–5000 TRUE damage (penetrates armor directly to life). (CD 3)",
+    cooldownTurns: 3,
+    skill: (me, foe) => {
+      if ((me.cooldown || 0) > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
+      const roll = randInt(500, 5000);
+      applyDamage(foe, roll, {
+        silent: true,
+        source: "skill",
+        damageType: "true",
+        attacker: me,
+        attackerName: me.name
+      });
+      me.cooldown = 4;
+      return { ok: true, msg: `⚖️ Gods Justice strikes for ${roll} TRUE damage.` };
+    }
+  };
+}
+
+// =========================
+// 🎯 MISSION GATES (visibility + unlock flow)
+// Mission 1: 50 win streak -> unlocks Cosmo Secret (owned)
+// Mission 2: defeat Cosmo Secret -> unlocks Ray Bill (owned) + unlocks Diablo (enemy + gallery)
+// Mission 3: defeat Diablo -> unlocks Entity (enemy + gallery)
+// Mission 4: defeat Entity -> unlocks Awakened Monster (enemy-only boss)
+// Mission 5: defeat Awakened Monster -> unlocks Anti-Matter (owned)
+// Mission 6: defeat Anti-Matter -> unlocks Boss Fight (Story Mode)
+// =========================
+function isMission1Complete() {
+  return !!(state && state.owned && state.owned["cosmoSecret"]);
+}
+
+function isMission2Complete() {
+  return !!(state && state.missions && state.missions.cosmoRevelationDefeated);
+}
+
+function isMission3Complete() {
+  return !!(state && state.missions && state.missions.diabloDefeated);
+}
+
+function isMission4Complete() {
+  return !!(state && state.missions && state.missions.entityDefeated);
+}
+
+function ensureMissionUnlockDefaults() {
+  if (!state.missions) state.missions = {};
+  const m = state.missions;
+
+  // These flags control whether secret enemy cards are visible/spawnable.
+  if (m.diabloUnlocked !== true) m.diabloUnlocked = false;
+  if (m.entityUnlocked !== true) m.entityUnlocked = false;
+  if (m.entityDefeated !== true) m.entityDefeated = false;
+  if (m.antiMatterUnlocked !== true) m.antiMatterUnlocked = false;
+  if (m.antiMatterDefeated !== true) m.antiMatterDefeated = false;
+  if (m.awakenMonsterDefeated !== true) m.awakenMonsterDefeated = false;
+  if (m.godOfAllGodsModalShown !== true) m.godOfAllGodsModalShown = false;
+
+  // ✅ Backfill mission unlocks for older saves / edge cases.
+  // Mission 2 complete → Diablo becomes visible/spawnable.
+  if (isMission2Complete()) m.diabloUnlocked = true;
+
+  // Mission 3 complete → Entity becomes visible/spawnable (Mission 4 target).
+  // NOTE: Do NOT require Entity to be defeated to make it spawnable, otherwise Mission 4 can never start.
+  if (isMission3Complete()) m.entityUnlocked = true;
+}
 
 const SHOP_CARDS = [
 
@@ -1218,6 +1454,8 @@ const CARD_LORE = {
   "spacePatron": "An interstellar peacekeeper—half cop, half cosmic beacon—who arrests criminals with pure light.",
   "luckyCat": "A wandering charm-spirit that follows gold trails and turns misfortune into opportunity.",
   "cosmicGod": "An ancient godform sealed beyond the stars; when it awakens, reality rewinds to its favor.",
+  "cosmoSecret": "Cosmo carries forbidden star-sigils—coordinates to the throne of the *God of All Gods*. When the pantheons go to war, those sigils decide who survives the reset.",
+  "rayBill": "Ray Bill was a nameless drifter until he found a broken shard of thunder sealed inside a dying star. The shard didn’t grant him lightning—it granted him a debt. Every time he calls the storm, the heavens remember, and the sky opens like a wound. He walks ahead of wars, carrying a prophecy in his bones: when the God of All Gods rises, only thunder can drown the final hymn.",
   "daysi": "A fearless rocket courier who wins fights the same way she wins races: faster than fear.",
   "patrickDestroyer": "A duelist raised in asteroid mines—quiet, brutal, and famous for never needing a second chance.",
   "spaceSkeletonPirate": "A pirate crew’s last survivor, reanimated by plasma—still hungry for stolen armor.",
@@ -1239,6 +1477,7 @@ const CARD_LORE = {
 
   "relicbornTitan": "An Entity forged from broken relics—it spins fate like a roulette wheel and calls it justice.",
   "diablo": "Born in the Furnace Below, Diablo devours fallen souls to stoke his infernal core. Each victory feeds the flames—each defeat leaves only ash and a whisper that he will return.",
+  "antiMatter": "When Entity fell, the veil tore—revealing the Gods of All Gods and their cleansing intention: deletion of all lifeforms. Anti‑Matter awakened as creation’s refusal, rolling voidfire numbers that become impossible life and armor.",
   "drNemesis": "A ruthless scientist who treats battle like an equation—poison and debuffs, repeated until solved.",
   "hollyChild": "A fragile miracle with a toxic gift—her blessing is poison that never stops.",
   "ohtensahorse": "A prankster beast of the outer rim—its beam is either a joke… or a catastrophe.",
@@ -1273,6 +1512,15 @@ const RELICS = [
 // =========================
 // NOTE: Prices are intentionally high (as requested) and are saved in your account inventory.
 const POTIONS = [
+  {
+    id: "potionGodsUltimate",
+    name: "God's Ultimate",
+    price: 900000,
+    desc: "Silences enemy for 2 rounds, removes enemy defense, deals 80–500 random damage, then gains HP/DEF/MAX HP equal to damage. (CD 2 turns)",
+    effect: "godsUltimate",
+    cooldownTurns: 2
+  },
+
   {
     id: "potionHealth",
     name: "Potion of Health",
@@ -1371,9 +1619,22 @@ const state = {
   missions: {
     totalDefeats: 0,
     cosmoRevelationDefeated: false,
+    diabloUnlocked: false,
     diabloDefeated: false,
+    entityUnlocked: false,
     entityDefeated: false,
+    antiMatterUnlocked: false,
+    antiMatterModalShown: false,
+    antiMatterDefeated: false,
+    awakenMonsterDefeated: false,
+    godOfAllGodsModalShown: false,
   },
+
+  // Story/Boss flow
+  pendingBoss: null,
+  storyBossFight: false,
+  stageLabel: "",
+  _awakenedSpawnedThisRun: false,
   ownedRelics: {},
   relics: [],
   equippedRelicId: null,
@@ -1430,7 +1691,15 @@ window.__cardPlaceholder = function (name = "Card") {
 // Triggered when the player defeats Cosmo Secret.
 // =========================
 function showCosmoOmenModal() {
+  // ✅ Only show this reveal once (persisted).
+  // Otherwise players would see it every time they defeat Cosmo Secret again.
+  if (state && state.cosmoOmenShown) return;
   if (document.getElementById("cosmoOmenOverlay")) return;
+
+  try {
+    state.cosmoOmenShown = true;
+    saveProgress();
+  } catch (e) {}
 
   const overlay = document.createElement("div");
   overlay.className = "modalOverlay";
@@ -1539,6 +1808,192 @@ actions.appendChild(btn);
   });
 
   document.body.appendChild(overlay);
+}
+
+// =========================
+// 🕳️ ANTI-MATTER AWAKENED MODAL (Mission 5 reward)
+// Triggered when the player defeats the Awakened Monster.
+// =========================
+function showAntiMatterAwakenedModal() {
+  if (document.getElementById("antiMatterOmenOverlay")) return;
+
+  // Mission 5 reward: unlock Anti-Matter as a usable card (one-time).
+  ensureMissionUnlockDefaults();
+  if (!state.owned) state.owned = {};
+  state.owned["antiMatter"] = true;
+  state.missions.antiMatterUnlocked = true;
+  state.missions.antiMatterModalShown = true;
+  try { saveProgress(); } catch (e) {}
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.id = "antiMatterOmenOverlay";
+
+  const box = document.createElement("div");
+  box.className = "modalBox omenModalBox";
+
+  const header = document.createElement("div");
+  header.className = "modalHeader";
+
+  const title = document.createElement("div");
+  title.className = "modalTitle";
+  title.textContent = "🕳️ Anti-Matter Unlocked";
+
+  const pill = document.createElement("div");
+  pill.className = "modalPill";
+  pill.textContent = "MISSION 5 CLEARED";
+
+  header.appendChild(title);
+  header.appendChild(pill);
+
+  const body = document.createElement("div");
+  body.className = "modalBody";
+
+  const p = document.createElement("p");
+  p.className = "modalText";
+  p.innerHTML = "<b>You defeated the Awakened Monster.</b> Anti-Matter has been unlocked as a playable card.";
+
+  const card = {
+    name: "Anti-Matter",
+    img: "cards/anti-matter.png",
+    atk: 12,
+    def: 10,
+    hp: 20,
+    skillName: "Genesis Collapse",
+    skillDesc: "Generate random 50–2000 TRUE magic damage (penetrates armor). Convert the generated number into Life + Armor (not stackable). (CD 15)",
+    lore:
+      "When Entity fell, the veil tore—revealing the Gods of All Gods. Their ‘cleansing intention’ was not mercy, but deletion: a command that would remove every lifeform from the ledger of existence. In that silent decree, Anti‑Matter awakened. It is not a weapon… it is the universe’s refusal. Each time it casts, it rolls a number written in voidfire—then turns that verdict into impossible life and armor, as if daring creation to survive its own apocalypse."
+  };
+
+  const wrap = document.createElement("div");
+  wrap.className = "omenCardWrap";
+
+  const img = document.createElement("img");
+  img.className = "omenCardImg";
+  img.src = card.img;
+  img.alt = card.name;
+  img.onerror = function () {
+    this.onerror = null;
+    this.src = window.__cardPlaceholder(card.name);
+  };
+
+  const stats = document.createElement("div");
+  stats.className = "modalStats";
+  stats.innerHTML = `
+    <div class="modalStat"><div class="modalStatLabel">Damage</div><div class="modalStatValue">${card.atk}</div></div>
+    <div class="modalStat"><div class="modalStatLabel">Defense</div><div class="modalStatValue">${card.def}</div></div>
+    <div class="modalStat"><div class="modalStatLabel">Life</div><div class="modalStatValue">${card.hp}</div></div>
+    <div class="modalStat"><div class="modalStatLabel">Ability</div><div class="modalStatValue" style="font-size:14px;line-height:1.2;">${card.skillName}</div></div>
+  `;
+
+  const hint = document.createElement("div");
+  hint.className = "modalHint";
+  hint.textContent = "🕳️ 50–2000 TRUE magic • ignores armor • converts roll → Life + Armor • 15-turn cooldown";
+
+  const lore = document.createElement("div");
+  lore.className = "omenLore";
+  lore.textContent = card.lore;
+
+  wrap.appendChild(img);
+  wrap.appendChild(stats);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "modalActions";
+
+  const btn = document.createElement("button");
+  btn.className = "btn";
+  btn.textContent = "Continue";
+  btn.onclick = () => {
+    // Refresh views (so it appears immediately)
+    try { if (typeof renderPick === "function") renderPick(); } catch (e) {}
+    try { if (typeof renderGallery === "function") renderGallery(); } catch (e) {}
+    try { if (typeof renderShopCards === "function") renderShopCards(); } catch (e) {}
+    try { if (state.currentView === "home") updateMissionText(); } catch (e) {}
+
+    const ov = document.getElementById("antiMatterOmenOverlay");
+    if (ov) ov.remove();
+  };
+
+  btnRow.appendChild(btn);
+
+  body.appendChild(p);
+  body.appendChild(wrap);
+  body.appendChild(hint);
+  body.appendChild(lore);
+
+  box.appendChild(header);
+  box.appendChild(body);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// =========================
+// 👑 GOD OF ALL GODS AWAKENED MODAL (after Mission 6)
+// =========================
+function showGodOfAllGodsAwakenedModal() {
+  if (document.getElementById("godOfAllGodsOverlay")) return;
+  ensureMissionUnlockDefaults();
+  if (!state.missions || state.missions.godOfAllGodsModalShown) return;
+
+  state.missions.godOfAllGodsModalShown = true;
+  try { saveProgress(); } catch(e) {}
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.id = "godOfAllGodsOverlay";
+
+  const box = document.createElement("div");
+  box.className = "modalBox omenModalBox";
+
+  box.innerHTML = `
+    <div class="modalHeader">
+      <div>
+        <div class="modalTitle">👑 The God of All Gods has awakened</div>
+        <div class="modalPill">MISSION 5 CLEARED</div>
+      </div>
+    </div>
+    <div class="modalBody">
+      <p class="modalText">
+        <b>The God of all gods is already awakened</b>—and ready to erase the entire existing universe.
+        <br/><br/>
+        It’s your time now.
+        <br/><br/>
+        Go to <b>Story Mode</b> and click <b>Fight Boss Now</b>.
+        <br/>
+        (It becomes clickable only when Mission 6 is completed.)
+      </p>
+
+      <div class="omenLore" style="white-space:pre-wrap;">
+The portal is not a door.
+It is a verdict.
+
+Anti‑Matter doesn’t beg.
+It <i>refuses</i>.
+
+And somewhere beyond the stars…
+Omni has opened his eyes.
+      </div>
+    </div>
+    <div class="modalActions">
+      <button class="btn btnPrimary" id="btnGoStoryBoss">📜 Go to Story Mode</button>
+      <button class="btn btnGhost" id="btnCloseGodBoss">Close</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const close = () => { try { overlay.remove(); } catch(e){} };
+  const btnClose = box.querySelector("#btnCloseGodBoss");
+  const btnGo = box.querySelector("#btnGoStoryBoss");
+  if (btnClose) btnClose.addEventListener("click", close);
+  if (btnGo) btnGo.addEventListener("click", () => {
+    close();
+    try { openStoryMode(); } catch(e) { try { showView("story"); } catch(_e){} }
+  });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 }
 
 // =========================
@@ -1747,6 +2202,17 @@ function renderShopCards() {
      </button>`
       : ``;
 
+    const shopCardDesc = (() => {
+      const def = cardDef || item;
+      const dmg = Number(st.atk) || Number(def.atk) || 0;
+      const arm = Number(st.def) || Number(def.def) || 0;
+      const life = Number(st.hp) || Number(def.hp) || 0;
+      const abName = def.skillName || "Ability";
+      const abDesc = def.skillDesc || (item.desc || "");
+      // Keep it readable (Shop cards can have long abilities).
+      return `Damage: ${dmg} • Armor: ${arm} • Life: ${life} • ${abName} — ${abDesc}`;
+    })();
+
     div.innerHTML = `
       ${imgHtml}
       <div class="shopItemTop">
@@ -1758,7 +2224,7 @@ function renderShopCards() {
           </div>
         </div>
       </div>
-      <p class="shopDesc">${item.desc || ""}</p>
+      <p class="shopDesc">${shopCardDesc}</p>
       <div class="shopActions">
         <button class="btn btnPrimary" ${btnDisabled ? "disabled" : ""} data-shop-card-id="${item.id}">${btnText}</button>
         ${upgradeBtnHtml}
@@ -2118,10 +2584,15 @@ function showCosmoRevealModal() {
 
   if (lore) {
     lore.textContent =
-`The Revelation speaks of a war that will break the sky itself.
+`Cosmo's "secret" isn't a power… it's a memory that was never meant to return.
 
-When the *God of All Gods* awakens, every realm will choose a side — Glory… or Oblivion.
+Long before the arenas, Cosmo witnessed the first divine betrayal: the lesser gods forged thrones out of stolen stars.
+Now the sky is cracking again.
 
+Soon, the *God of All Gods* will rise — not to rule… but to reset creation.
+When the Pantheons march, every god will be forced to kneel, or be erased.
+
+Cosmo carries the only map through the coming storm: the hidden sigils that bind the gods.
 Cosmo is not just a fighter. Cosmo is a KEY.
 And now… the key is in your hands.`;
   }
@@ -2211,7 +2682,16 @@ function getAllCards() {
 
   const map = new Map();
   [...BASE_CARDS, ...unlocked].forEach((c) => map.set(c.id, c));
-  return Array.from(map.values());
+
+  // Enemy-only cards should never be selectable/usable by the player.
+  // ✅ Also hard-gate Diablo: it should only be usable once the player reaches Legend rank.
+  // (Prevents old saves / edge cases from showing Diablo early.)
+  return Array.from(map.values()).filter((c) => {
+    if (!c) return false;
+    if (c.enemyOnly) return false;
+    if (c.id === "diablo") return !!state.diabloUnlocked;
+    return true;
+  });
 }
 
 // =========================
@@ -2222,8 +2702,48 @@ function getGalleryCards() {
   const map = new Map();
   [...BASE_CARDS, ...allUnlockables].forEach((c) => map.set(c.id, c));
 
-  // hide secret cards until you own them
-  return Array.from(map.values()).filter((c) => !c.secret || !!(state.owned && state.owned[c.id]));
+  // ✅ Hide secret cards until they are actually unlocked by missions.
+  // This also gates which enemies can spawn because spawnNextEnemy() uses this pool.
+  ensureMissionUnlockDefaults();
+  return Array.from(map.values()).filter((c) => {
+    if (!c) return false;
+    if (!c.secret) return true;
+
+    // ✅ Mission-gated cards must NOT appear in Gallery/Battle unless their mission gate is satisfied.
+    // Even if a player somehow owns the card early (old saves / lucky edge cases), keep it hidden
+    // until the correct mission unlock flag is set.
+    const owned = !!(state.owned && state.owned[c.id]);
+
+    // Mission-locked enemies / rewards
+    if (c.id === "cosmoSecret") {
+      // Mission 1 reward: Cosmo Secret only appears once unlocked via 50 win streak.
+      return isMission1Complete();
+    }
+    if (c.id === "rayBill") {
+      // Mission 2 reward: only visible after defeating Cosmo Secret (and actually owning it).
+      return owned && isMission2Complete();
+    }
+    if (c.id === "diablo") {
+      // ✅ Legend reward: Diablo is ONLY visible/spawnable after reaching Legend rank.
+      return !!state.diabloUnlocked;
+    }
+    if (c.id === "relicbornTitan") {
+      // ✅ Entity must NOT appear before Mission 3 is complete.
+      // Mission 4 requires fighting Entity, so it must be visible/spawnable *after* Diablo is defeated.
+      return !!(state.missions && (state.missions.entityUnlocked || state.missions.entityDefeated) && isMission3Complete());
+    }
+    if (c.id === "antiMatter") {
+      // Mission 5 reward: only visible after defeating the Awakened Monster.
+      return !!(state.missions && state.missions.antiMatterUnlocked);
+    }
+    if (c.id === "awakenedMonster") {
+      // Mission 5 target: only spawnable after Entity is defeated, and until cleared.
+      return !!(state.missions && state.missions.entityDefeated && !state.missions.awakenMonsterDefeated);
+    }
+
+    // Default for other secret cards: hidden until owned.
+    return owned;
+  });
 }
 
 function findCardById(id) {
@@ -2248,8 +2768,19 @@ function loadProgress() {
     if (!state.missions) state.missions = {};
     state.missions.totalDefeats = Math.max(0, Number(m.totalDefeats || state.missions.totalDefeats || 0) || 0);
     state.missions.cosmoRevelationDefeated = !!(m.cosmoRevelationDefeated ?? state.missions.cosmoRevelationDefeated);
+    state.missions.diabloUnlocked = !!(m.diabloUnlocked ?? state.missions.diabloUnlocked);
     state.missions.diabloDefeated = !!(m.diabloDefeated ?? state.missions.diabloDefeated);
+    state.missions.entityUnlocked = !!(m.entityUnlocked ?? state.missions.entityUnlocked);
     state.missions.entityDefeated = !!(m.entityDefeated ?? state.missions.entityDefeated);
+    state.missions.antiMatterUnlocked = !!(m.antiMatterUnlocked ?? state.missions.antiMatterUnlocked);
+    state.missions.antiMatterModalShown = !!(m.antiMatterModalShown ?? state.missions.antiMatterModalShown);
+    state.missions.antiMatterDefeated = !!(m.antiMatterDefeated ?? state.missions.antiMatterDefeated);
+    state.missions.awakenMonsterDefeated = !!(m.awakenMonsterDefeated ?? state.missions.awakenMonsterDefeated);
+    state.missions.godOfAllGodsModalShown = !!(m.godOfAllGodsModalShown ?? state.missions.godOfAllGodsModalShown);
+
+    // ✅ One-time reveals (stored alongside missions)
+    state.rayBillOmenShown = !!(m.rayBillOmenShown ?? state.rayBillOmenShown);
+    state.cosmoOmenShown = !!(m.cosmoOmenShown ?? state.cosmoOmenShown);
   } catch {
     // keep defaults
   }
@@ -2313,7 +2844,7 @@ function loadProgress() {
     const t = Number(localStorage.getItem(POTION_COOLDOWN_KEY) || "0") || 0;
     state.potionCooldownTurns = Math.max(0, Number.isFinite(t) ? t : 0);
   } catch {
-    state.potionCooldownTurns = 0;
+    state.potionCooldownTurns = Math.max(0, Number(turns || 0) || 0);
   }
 
   // ---- Lucky Draw ----
@@ -2385,7 +2916,12 @@ function loadProgress() {
 function saveProgress() {
   localStorage.setItem(GOLD_KEY, String(state.gold));
   localStorage.setItem(OWNED_KEY, JSON.stringify(state.owned));
-  localStorage.setItem(MISSION_KEY, JSON.stringify(state.missions || {}));
+  // ✅ Persist one-time reveal flags together with mission progress.
+  localStorage.setItem(MISSION_KEY, JSON.stringify({
+    ...(state.missions || {}),
+    rayBillOmenShown: !!state.rayBillOmenShown,
+    cosmoOmenShown: !!state.cosmoOmenShown,
+  }));
   localStorage.setItem(RELIC_OWNED_KEY, JSON.stringify(state.ownedRelics));
   localStorage.setItem(RELIC_EQUIPPED_KEY, state.equippedRelicId || "");
   localStorage.setItem(POTION_OWNED_KEY, JSON.stringify(state.ownedPotions || {}));
@@ -2559,6 +3095,23 @@ function renderProfileUI() {
     if (nums) nums.textContent = `${xp} / ${xp}`;
     if (fill) fill.style.width = `100%`;
     if (fill) applyRankTheme(fill, rankName, "glow");
+  }
+
+  // 🏆 Legend reward (Diablo)
+  const lrText = document.getElementById("legendRewardText");
+  const lrImg = document.getElementById("legendRewardImg");
+  const lrBox = document.getElementById("legendRewardBox");
+  if (lrBox) {
+    // keep the box visible always, but update the message based on unlock
+    if (state && state.diabloUnlocked) {
+      if (lrText) lrText.innerHTML = `Unlocked: <b>Diablo</b> is now available in your cards.`;
+      if (lrImg) lrImg.style.display = "block";
+      lrBox.setAttribute("data-unlocked", "1");
+    } else {
+      if (lrText) lrText.innerHTML = `Reach <b>Legend</b> rank to unlock <b>Diablo</b>.`;
+      if (lrImg) lrImg.style.display = "none";
+      lrBox.setAttribute("data-unlocked", "0");
+    }
   }
 
   // stats
@@ -2801,6 +3354,11 @@ function canUpgradeCard(cardId) {
 
 function isCardUsableByPlayer(cardId) {
   const id = String(cardId || "");
+  // ✅ Hard gate Diablo: only usable after reaching Legend (diabloUnlocked).
+  if (id === "diablo" && !state?.diabloUnlocked) return false;
+  // ✅ Hard gate Entity: even if obtained early (Lucky Draw / old save),
+  // it must not be usable/visible until Mission 4 is completed.
+  if (id === "relicbornTitan" && !isMission4Complete()) return false;
   // base cards are always usable; unlockables require ownership
   const isBase = (BASE_CARDS || []).some((c) => c.id === id);
   const isOwnedUnlock = !!(state.owned && state.owned[id] && UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS[id]);
@@ -2857,14 +3415,177 @@ function getShopCardIdSet() {
 // They appear ONLY if owned/unlocked, and they must NOT be purchasable in the Shop.
 const SECRETS_ONLY_CARD_IDS = ["relicbornTitan", "diablo", "yrol", "abarskie", "cosmoSecret"]; // Entity, Diablo, Yrol, Abarskie, Cosmo-Secret
 
+// =========================
+// ⚔️ 1v1 QUICK DUEL (Profile)
+// - Player picks ANY usable card
+// - Enemy is random from a small "boss" pool (only if visible/unlocked in Gallery or Battle)
+// =========================
+
+// Requested enemy pool (when unlocked/visible):
+// Cosmic God, Tremo, Starbreaker Null King, Entity, Cosmic Revelation (Cosmo Secret), Diablo
+const DUEL_ENEMY_CANDIDATE_IDS = [
+  "cosmicGod",
+  "tremo",
+  "starbreakerNullKing",
+  "relicbornTitan",
+  "cosmoSecret",
+  "diablo",
+];
+
+function getDuelEnemyPool(playerId) {
+  const all = getGalleryCards();
+  const pid = String(playerId || "");
+  // only include enemies that are currently visible/unlocked (gallery cards), and not the player's card
+  const pool = all.filter((c) => c && DUEL_ENEMY_CANDIDATE_IDS.includes(String(c.id)) && String(c.id) !== pid);
+  // Fallback: if nothing is available (e.g., none unlocked yet), just use normal pool
+  return pool.length ? pool : all.filter((c) => c && String(c.id) !== pid);
+}
+
+function openDuelModal() {
+  if (document.getElementById("duelOverlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.id = "duelOverlay";
+
+  const box = document.createElement("div");
+  box.className = "modalBox";
+
+  box.innerHTML = `
+    <div class="modalHeader">
+      <div class="modalTitle">⚔️ 1v1 Quick Duel</div>
+      <div class="modalPill">Pick your fighter</div>
+    </div>
+    <div class="modalBody">
+      <p class="modalText">Choose a card you own/use. You will fight a <b>random boss</b> from the unlocked pool (Cosmic God, Tremo, Starbreaker Null, Entity, Cosmo Secret, Diablo).</p>
+	      <div class="duelPickScroll" aria-label="Choose your fighter">
+	        <div id="duelPickGrid" class="grid" style="margin-top:0;"></div>
+	      </div>
+    </div>
+    <div class="modalActions single">
+      <button class="btn btnGhost" id="btnDuelClose">Close</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const grid = box.querySelector("#duelPickGrid");
+  const cards = (getGalleryCards() || [])
+    .filter((c) => c && isCardUsableByPlayer(c.id))
+    // keep existing restrictions: enemy-only cards cannot be selected
+    .filter((c) => c && c.id !== "cosmicGod" && c.id !== "antiMatter")
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+  cards.forEach((c) => {
+    const up = (typeof getUpgradedStats === "function") ? getUpgradedStats(c) : { atk: c.atk, def: c.def, hp: c.hp, level: 0 };
+
+    const tile = document.createElement("div");
+    tile.className = "cardPick";
+    // ✅ Mobile scroll-friendly: allow swipe/scroll without accidentally selecting a card.
+    // We only treat it as a "tap" if the pointer didn't move beyond a small threshold.
+    tile.style.touchAction = "pan-y";
+    const safeName = String(c.name || "Card");
+    tile.innerHTML = `
+      <img src="${c.img}" alt="${safeName}" onerror="this.onerror=null;this.src=window.__cardPlaceholder('${safeName.replace(/'/g, "\\'")}')" />
+      <div style="margin-top:10px;font-weight:1000;letter-spacing:.2px;">${safeName}${up.level ? ` <span class='pill' style='margin-left:6px;'>Lv${up.level}</span>` : ""}</div>
+      <div class="muted" style="margin-top:6px;font-weight:900;">ATK ${up.atk} • DEF ${up.def} • HP ${up.hp}</div>
+      <div class="muted" style="margin-top:6px;">${c.skillName}</div>
+    `;
+    // Tap-vs-scroll guard
+    let _downX = 0, _downY = 0, _moved = false;
+    tile.addEventListener("pointerdown", (e) => {
+      _moved = false;
+      _downX = e.clientX;
+      _downY = e.clientY;
+      // capture so we still get pointerup even if finger drifts
+      try { tile.setPointerCapture(e.pointerId); } catch (_) {}
+    }, { passive: true });
+    tile.addEventListener("pointermove", (e) => {
+      const dx = Math.abs(e.clientX - _downX);
+      const dy = Math.abs(e.clientY - _downY);
+      if (dx > 10 || dy > 10) _moved = true;
+    }, { passive: true });
+    tile.addEventListener("pointerup", (e) => {
+      // If the user was scrolling/swiping, don't select.
+      if (_moved) return;
+      playSfx("sfxClick", 0.35);
+      closeDuelModal();
+      startDuelGame(c.id);
+    });
+    tile.addEventListener("pointercancel", () => { _moved = true; });
+    grid.appendChild(tile);
+  });
+
+  const closeBtn = box.querySelector("#btnDuelClose");
+  if (closeBtn) closeBtn.addEventListener("click", () => { playSfx("sfxClick", 0.25); closeDuelModal(); });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeDuelModal();
+  });
+}
+
+function closeDuelModal() {
+  const el = document.getElementById("duelOverlay");
+  if (el) el.remove();
+}
+
+function startDuelGame(playerCardId) {
+  // Keep the same safety rules as startGame
+  if (playerCardId === "cosmicGod") {
+    alert("Cosmic God is sealed by the Gods and cannot be selected. (Enemy-only card)");
+    return;
+  }
+  if (playerCardId === "antiMatter") {
+    alert("Anti-Matter is awakened, but it is ENEMY-only and cannot be selected.");
+    return;
+  }
+
+  state.duelMode = true;
+  state.stage = 1;
+  state.relics = state.equippedRelicId ? [state.equippedRelicId] : [];
+
+  // Per-run boss spawn guards
+  state._entitySpawnedThisRun = false;
+  state._awakenedSpawnedThisRun = false;
+
+  const playerBase = findCardById(playerCardId);
+  const pool = getDuelEnemyPool(playerCardId);
+  const enemyBase = pool[Math.floor(Math.random() * pool.length)];
+
+  state.player = cloneCard(playerBase);
+  state.enemy = cloneCard(enemyBase);
+  state.enemy.passiveEnabled = true;
+  state.enemy.aiType = pickEnemyAI();
+
+  state.player.shield = Math.min(getShieldCap(state.player), state.player.shield);
+  state.player.def = state.player.shield;
+
+  state.phase = "battle";
+  state.turn = "player";
+  state.round = 1;
+
+  // Potions cooldown resets per match
+  state.potionCooldownTurns = 0;
+  saveProgress();
+
+  showView("game");
+  resetCardVisuals();
+  $("log").innerHTML = "";
+
+  log(`⚔️ 1v1 Duel: You picked ${state.player.name}. Enemy is ${state.enemy.name}.`, "warn");
+  log(`🧠 Enemy AI: ${state.enemy.aiType}`, "warn");
+  tryEnemyPassive();
+  updateUI();
+}
+
 function isSecretCardOwned(cardId) {
   const id = String(cardId || "");
   if (!id) return false;
 
   // Entity (Lucky Draw legendary)
   if (id === "relicbornTitan") return !!(state?.luckyEntityOwned || state?.owned?.relicbornTitan);
-  // Diablo unlock flag exists in save
-  if (id === "diablo") return !!(state?.diabloUnlocked || state?.owned?.diablo);
+  // ✅ Diablo is ONLY owned/visible when the Legend unlock flag is true.
+  if (id === "diablo") return !!state?.diabloUnlocked;
 
   // Default: check owned map
   return !!state?.owned?.[id];
@@ -3100,10 +3821,10 @@ function updateMissionText() {
   let subLine = "";
 
   if (!hasCosmo) {
-    const prog = Math.min(50, total);
-    const left = Math.max(0, 50 - total);
-    mainLine = "Mission 1: Defeat 50 cards to get the Cosmo Revelation.";
-    subLine = `Progress: ${prog}/50 (${left} left)`;
+    // Mission 1 is intentionally a "straight" streak challenge.
+    // Do not show a numeric counter on the Home card.
+    mainLine = "Mission 1: Defeat 50 cards straight to reveal the Revelation.";
+    subLine = "Status: Keep your streak alive — losing resets the path.";
   } else if (!hasRayBill) {
     mainLine = "Mission 2: Defeat Cosmo Revelation to unlock Ray Bill.";
     subLine = state.missions.cosmoRevelationDefeated
@@ -3115,9 +3836,15 @@ function updateMissionText() {
   } else if (!state.missions.entityDefeated) {
     mainLine = "Mission 4: Defeat Entity itself to proceed to Mission 5.";
     subLine = "Status: Not defeated yet.";
+  } else if (!state.missions.awakenMonsterDefeated) {
+    mainLine = "Mission 5: Defeat the Awakened Monster.";
+    subLine = "Status: Not defeated yet. (Defeat it to unlock Anti-Matter)";
+  } else if (!state.missions.antiMatterDefeated) {
+    mainLine = "Mission 6: Defeat the Anti-Matter card to unlock the Boss Fight.";
+    subLine = "Status: Anti-Matter not defeated yet. (Defeat it to open the portal)";
   } else {
-    mainLine = "Mission 5: Coming Soon";
-    subLine = "More missions will be added soon.";
+    mainLine = "All Missions Cleared: The portal to Omni is open.";
+    subLine = "Status: Mission 6 complete ✅ (Boss Fight unlocked ✅)";
   }
 
   box.innerHTML = `🎯 <b>MISSIONS</b>: ${mainLine}<span class="mutedLine">${subLine}</span>`;
@@ -3394,6 +4121,8 @@ function renderStoryPage(animateTyping = false) {
   const title = document.getElementById("storyTitle");
   const body = document.getElementById("storyBody");
   const boss = document.getElementById("storyBossWrap");
+  const bossSub = document.getElementById("storyBossSub");
+  const fightBtn = document.getElementById("btnFightBossNow");
 
   if (pill) pill.textContent = `Page ${__storyIndex + 1} / ${STORY_PAGES.length}`;
   if (title) title.textContent = p?.title || "";
@@ -3418,6 +4147,15 @@ function renderStoryPage(animateTyping = false) {
     boss.style.display = (__storyIndex >= STORY_PAGES.length - 1) ? "block" : "none";
   }
 
+  // Boss unlock gate: Mission 6 must be cleared
+  if (__storyIndex >= STORY_PAGES.length - 1) {
+    const unlocked = !!(state && state.missions && state.missions.antiMatterDefeated);
+    if (fightBtn) fightBtn.disabled = !unlocked;
+    if (bossSub) bossSub.textContent = unlocked
+      ? "The portal is open. Omni is waiting."
+      : "Complete Mission 6 to unlock";
+  }
+
   saveStoryProgress();
 }
 
@@ -3431,8 +4169,8 @@ function storyNext() {
   if (__storyTyping) { storyFinishTyping(); return; }
 
   if (__storyIndex >= STORY_PAGES.length - 1) {
-    alert("⚔️ Boss + God of All Gods battle is COMING SOON!\n\nFor now, return to Home and keep building your Glory.");
-    showView("home");
+    // Final page: stay here. The boss button becomes available once Mission 6 is cleared.
+    try { renderStoryPage(false); } catch(e) {}
     return;
   }
   __storyIndex = Math.min(STORY_PAGES.length - 1, __storyIndex + 1);
@@ -3787,6 +4525,17 @@ function applyDamage(defender, dmg, opts = {}) {
 
   // ✅ Legendary passive checks (e.g., Yrol)
   tryYrolPassive(defender, opts || {});
+
+  // ✅ Secret passive: Cosmo Secret (Gods Vision)
+  // Trigger using the *actual* damage taken (Armor absorbed + HP loss). This makes the
+  // passive reliable with armor/no-overflow rules and any damage reductions.
+  try {
+    if (actualTaken > 0) {
+      tryCosmoGodsVision(defender, opts.attacker || null, actualTaken, opts || {});
+    }
+  } catch (e) {
+    // Never let a passive break combat
+  }
 
   // Combat log detail
   if (!opts.silent && dmg > 0) {
@@ -4171,11 +4920,42 @@ function closeModal() { const m = document.getElementById("resultModal"); if (m)
 // =========================
 // BATTLE FLOW
 // =========================
+function setBossArenaMode(on) {
+  const arena = document.getElementById("arenaCard");
+  if (!arena) return;
+  if (on) arena.classList.add("arenaBossMode");
+  else arena.classList.remove("arenaBossMode");
+}
+
 function spawnNextEnemy() {
+  // Story boss fights do not spawn random next enemies
+  if (state.storyBossFight) return;
   const all = getGalleryCards();
   const playerId = state.player.id;
-  const pool = all.filter((c) => c.id !== playerId);
-  const enemyBase = pool[Math.floor(Math.random() * pool.length)];
+
+  // ✅ 1v1 Duel mode: keep enemies within the requested boss pool (when visible/unlocked)
+  let pool = state.duelMode ? getDuelEnemyPool(playerId) : (all || []).filter((c) => c && c.id !== playerId);
+  // Safety: never allow an empty enemy pool (prevents rare "undefined enemy" bugs)
+  if (!pool.length) pool = (BASE_CARDS || []).filter((c) => c && c.id !== playerId);
+  // ✅ Mission bosses: force-spawn certain enemies once per run when their mission is active.
+  let enemyBase = pool[Math.floor(Math.random() * pool.length)];
+  try {
+    ensureMissionUnlockDefaults();
+
+    // Mission 4 target: Entity spawns once per run after Mission 3 is complete, until defeated.
+    const wantsEntity = !!(state.missions && isMission3Complete() && (state.missions.entityUnlocked || state.missions.entityDefeated) && !state.missions.entityDefeated);
+    if (!state.duelMode && wantsEntity && !state._entitySpawnedThisRun) {
+      enemyBase = findCardById("relicbornTitan") || (UNLOCKABLE_CARD_DEFS && UNLOCKABLE_CARD_DEFS.relicbornTitan) || enemyBase;
+      state._entitySpawnedThisRun = true;
+    }
+
+    // Mission 5 boss: Awakened Monster spawns once per run after Entity is defeated, until cleared.
+    const wantsAwakened = !!(state.missions && state.missions.entityDefeated && !state.missions.awakenMonsterDefeated);
+    if (!state.duelMode && wantsAwakened && !state._awakenedSpawnedThisRun) {
+      enemyBase = buildAwakenedMonster();
+      state._awakenedSpawnedThisRun = true;
+    }
+  } catch(e) {}
 
   state.enemy = cloneCard(enemyBase);
   state.enemy.passiveEnabled = true;
@@ -4249,13 +5029,25 @@ function updateUI() {
   const p = state.player, e = state.enemy;
   if (!p || !e) return;
 
+  // ✅ Battle side-panel: always show current Rank + XP (replaces the old "Quick Guide" tips).
+  try {
+    const xp = Math.max(0, Number(state.profileXp || 0) || 0);
+    const { cur } = getNextRankInfo();
+    const rankName = (cur && cur.name) ? cur.name : getRankNameFromXp(xp);
+    const br = document.getElementById("battleRankPill");
+    if (br) br.textContent = `Rank: ${rankName}`;
+    const bx = document.getElementById("battleXpPill");
+    if (bx) bx.textContent = `XP: ${xp}`;
+  } catch (e) {}
+
   // ✅ Keep the legacy DEF field synced with current shield/armor so the UI shows one consistent Defense value.
   p.def = Number(p.shield || 0);
   e.def = Number(e.shield || 0);
 
   $("turnTag").textContent = `Turn: ${state.turn === "player" ? "Player" : "Enemy"}`;
   $("roundTag").textContent = `Round: ${state.round}`;
-  $("stageTag").textContent = `Stage: ${state.stage}`;
+  const stLabel = (state.stageLabel ? String(state.stageLabel) : String(state.stage));
+  $("stageTag").textContent = `Stage: ${stLabel}`;
   $("enemyPassiveTag").textContent = `Enemy Passive: ${Math.round((state.enemy?.passiveChance ?? 0.35) * 100)}%`;
   $("enemyAiTag").textContent = `Enemy AI: ${state.enemy.aiType}`;
   updateGoldUI();
@@ -4367,13 +5159,19 @@ function checkWin() {
 
     // After the death flip + a short delay so the last damage/ability effects are visible
     setTimeout(() => {
+      if (state.storyBossFight) {
+        // Reset boss arena on defeat
+        state.storyBossFight = false;
+        state.stageLabel = "";
+        setBossArenaMode(false);
+      }
       state.modalAction = "home";
       const btnNext = $("btnNextEnemy");
       if (btnNext) btnNext.textContent = "🏠 Go Home";
       openModal({
         title: "💀 Defeat",
-        text: `You died at Stage ${state.stage}.`,
-        stageLabel: `Stage ${state.stage}`,
+        text: state.stage >= 900 ? "Omni erased your name from the ledger of existence." : `You died at Stage ${state.stage}.`,
+        stageLabel: state.stage >= 900 ? "BOSS" : `Stage ${state.stage}`,
         hint: `Last hit: ${state.lastHitSummary || "Unknown"}.  Check the battle log above to see what killed you, then go home or restart.`,
         goldReward: 0,
         mode: "defeat"
@@ -4391,6 +5189,36 @@ function checkWin() {
     updateUI();
     playSfx("sfxWin", 0.85);
 
+    // Special resolution for Story Boss
+    if (state.storyBossFight && e && e.id === OMNI_BOSS_ID) {
+      setTimeout(() => {
+        // Cinematic ending
+        state.storyBossFight = false;
+        state.stageLabel = "";
+        setBossArenaMode(false);
+
+        const reward = 5000;
+        addGold(reward);
+        log(`🌟 THE VERDICT BREAKS! +${reward} gold.`, "good");
+        confettiBurst(120);
+
+        state.modalAction = "omni";
+        const btnNext = $("btnNextEnemy");
+        if (btnNext) btnNext.textContent = "📜 Back to Story";
+        const btnPlay = $("btnPlayAgain");
+        if (btnPlay) btnPlay.textContent = "🏠 Go Home";
+        openModal({
+          title: "👑 Omni Defeated",
+          text: "The God of All Gods falls—reality breathes again.\n\nFor now... the universe survives.",
+          stageLabel: "BOSS",
+          hint: "You can replay the fight anytime from Story Mode. Your Glory is now a signal across realms.",
+          goldReward: reward,
+          mode: "defeat" // reuse modal layout
+        });
+      }, 2200);
+      return true;
+    }
+
     const reward = 50 + Math.floor(state.stage * 18);
 
     // after death flip (0.55s) + 1s delay
@@ -4399,30 +5227,69 @@ function checkWin() {
       // 🎯 Missions progress
       // =========================
       if (!state.missions) state.missions = {};
+      ensureMissionUnlockDefaults();
       state.missions.totalDefeats = Math.max(0, Number(state.missions.totalDefeats || 0) || 0) + 1;
 
-      // Mission 1 reward: defeat 50 cards -> unlock Cosmo Secret (Cosmo Revelation)
-      if (state.missions.totalDefeats >= 50) {
-        if (!state.owned) state.owned = {};
-        if (!state.owned["cosmoSecret"]) {
-          state.owned["cosmoSecret"] = true;
-          try { saveProgress(); } catch(e) {}
-          try { showCosmoRevealModal(); } catch(e) {}
-          try { if (typeof renderPick === "function") renderPick(); } catch(e) {}
-          try { if (typeof renderGallery === "function") renderGallery(); } catch(e) {}
-          try { if (typeof renderShopCards === "function") renderShopCards(); } catch(e) {}
-        }
-      }
+      // Mission 1 reward (Cosmo Secret) is handled by the *win streak* system:
+      // - Must be 50 straight wins (loss resets)
+      // - Only shows the Cosmo Revelation modal the first time it is unlocked
+      // See: applyWinStreakMilestones() -> unlockSecretStreakCard().
 
       // Mission 2: Defeat Cosmo Revelation
-      if (e && e.id === "cosmoSecret") state.missions.cosmoRevelationDefeated = true;
+      if (e && e.id === "cosmoSecret") {
+        state.missions.cosmoRevelationDefeated = true;
+        // Unlock Diablo ...
+        state.missions.diabloUnlocked = true;
+      }
       // Mission 3: Defeat Diablo
-      if (e && e.id === "diablo") state.missions.diabloDefeated = true;
+      if (e && e.id === "diablo") {
+        state.missions.diabloDefeated = true;
+        // Unlock Entity after Mission 3
+        state.missions.entityUnlocked = true;
+      }
       // Mission 4: Defeat Entity (relicbornTitan)
-      if (e && e.id === "relicbornTitan") state.missions.entityDefeated = true;
+      // IMPORTANT: Mission 4 is only "active" after Mission 3 is complete (Diablo defeated).
+      // If Entity is defeated early (via dev tools/edge cases), do NOT grant Mission 4 rewards.
+      if (e && e.id === "relicbornTitan" && isMission3Complete() && state.missions.entityUnlocked) {
+        state.missions.entityDefeated = true;
+
+        // ✅ Reward: unlock the Entity card for the player.
+        // (Still hard-gated for use until Mission 4 is complete via isCardUsableByPlayer().)
+        if (!state.owned) state.owned = {};
+        state.owned.relicbornTitan = true;
+        log(`🎁 UNLOCKED: Entity card added to your collection!`, "good");
+      }
+
+      // Mission 5: Defeat the Awakened Monster
+      if (e && e.id === "awakenedMonster" && state.missions.entityDefeated) {
+        state.missions.awakenMonsterDefeated = true;
+      }
+
+      // Mission 6: Defeat Anti-Matter (unlocks the Boss Fight)
+      if (e && e.id === "antiMatter" && state.missions.antiMatterUnlocked) {
+        state.missions.antiMatterDefeated = true;
+      }
+
+      // 👑 After Mission 6: reveal the God of All Gods story + unlock boss button
+      if (state.missions.antiMatterDefeated && !state.missions.godOfAllGodsModalShown) {
+        try { saveProgress(); } catch(e) {}
+        try { showGodOfAllGodsAwakenedModal(); } catch(e) {}
+      }
 
       try { saveProgress(); } catch(e) {}
       try { if (state.currentView === "home") updateMissionText(); } catch(e) {}
+
+      // 🕳️ Mission 5 reward: Anti-Matter (ONE-TIME popup + unlock)
+      // Trigger when the Awakened Monster is defeated.
+      if (e && e.id === "awakenedMonster") {
+        const m1 = isMission1Complete();
+        const m2 = isMission2Complete();
+        const m3 = isMission3Complete();
+        const m4 = isMission4Complete();
+        if (m1 && m2 && m3 && m4 && state.missions.awakenMonsterDefeated && !state.missions.antiMatterModalShown) {
+          try { showAntiMatterAwakenedModal(); } catch (e) {}
+        }
+      }
 
       // 🌩️ Secret omen: defeating Cosmo Secret reveals Ray Bill
       if (e && e.id === "cosmoSecret" && !state.rayBillOmenShown) {
@@ -4664,6 +5531,40 @@ function applyPotionEffect(potion) {
   if (eff === "endurance" || eff === "galactic") {
     reduceAbilityCooldownByOne(p);
   }
+
+  // ✅ NEW: God's Ultimate (special combat potion)
+  if (eff === "godsUltimate") {
+    const e = state.enemy;
+    if (!e) return;
+
+    // Silence enemy ability for 2 rounds
+    e.silencedRounds = Math.max(Number(e.silencedRounds || 0) || 0, 2);
+
+    // Remove all enemy defense now
+    e.shield = 0;
+    e.def = 0;
+
+    // Deal random damage (80–500)
+    const dmg = 80 + Math.floor(Math.random() * (500 - 80 + 1));
+
+    // Apply TRUE damage (ignores armor)
+    applyDamage(e, dmg, { silent: true, source: "skill", damageType: "true" });
+
+    // Convert damage into HP + Defense + Max HP for player
+    const gain = Math.max(0, Number(dmg || 0) || 0);
+
+    p.maxHp = Math.max(1, Number(p.maxHp || 1) || 1) + gain;
+    p.hp = Math.min(p.maxHp, (Number(p.hp || 0) || 0) + gain);
+
+    // Defense uses shield/def fields
+    p.shield = Math.min(getShieldCap(p), (Number(p.shield || 0) || 0) + gain);
+    p.def = p.shield;
+
+    if (typeof log === "function") {
+      log(`🧪 God's Ultimate activated! Enemy silenced (2 rounds), armor shattered, took ${dmg} TRUE damage. You gained +${gain} HP/+${gain} DEF/+${gain} Max HP.`, "good");
+    }
+  }
+
 }
 
 function consumePotion(id) {
@@ -4676,52 +5577,162 @@ function consumePotion(id) {
 }
 
 function usePotionFlow() {
+  // ✅ Upgraded UX: use a proper modal picker instead of alert()/prompt().
+  // (Alerts feel cheap on mobile and interrupt the flow.)
   if (state.phase !== "battle") {
-    alert("You can only use potions during battle.");
+    try { showToast("🧪 You can only use potions during battle.", "warn"); } catch (e) {}
     return;
   }
   if (state.turn !== "player") {
-    alert("You can only use potions on your turn.");
+    try { showToast("⏳ Potions can only be used on your turn.", "warn"); } catch (e) {}
     return;
   }
 
   const available = (POTIONS || []).filter((x) => getPotionCount(x.id) > 0);
   if (!available.length) {
-    alert("No potions in your inventory. Buy some in the Shop (🧪 Potions tab).");
+    try { showToast("No potions in inventory — buy some in Shop → 🧪 Potions.", "warn"); } catch (e) {}
     return;
   }
   if (!isPotionReady()) {
-    alert(`Potion is on cooldown: ${formatPotionCd()}`);
+    try { showToast(`Potion cooldown: ${formatPotionCd()}`, "warn"); } catch (e) {}
     return;
   }
 
-  const menu = available
-    .map((x, i) => `${i + 1}) ${x.name} (x${getPotionCount(x.id)})`)
-    .join("\n");
+  openPotionUseModal(available);
+}
 
-  const raw = prompt(`Choose a potion to use:\n\n${menu}\n\n(Type the number)`);
-  if (raw == null) return;
-  const idx = (parseInt(String(raw).trim(), 10) || 0) - 1;
-  const chosen = available[idx];
-  if (!chosen) {
-    alert("Invalid selection.");
-    return;
-  }
+// =========================
+// 🧪 POTION MODAL (in-battle)
+// =========================
+function closePotionUseModal() {
+  const el = document.getElementById("potionUseOverlay");
+  if (el) el.remove();
+}
 
-  if (!consumePotion(chosen.id)) {
-    alert("You don't have that potion anymore.");
-    return;
-  }
+function openPotionUseModal(availablePotions) {
+  closePotionUseModal();
 
-  applyPotionEffect(chosen);
-  setPotionCooldown();
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.id = "potionUseOverlay";
 
-  // feedback
-  playSfx("sfxSkill", 0.55);
-  if (typeof log === "function") log(`🧪 You used ${chosen.name}!`, "good");
-  if (typeof floatingDamage === "function") floatingDamage("player", "🧪", "good");
+  const box = document.createElement("div");
+  box.className = "modalBox potionModalBox";
 
-  updateUI();
+  const header = document.createElement("div");
+  header.className = "modalHeader";
+
+  const titleWrap = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "modalTitle";
+  title.textContent = "🧪 Use a Potion";
+
+  const pill = document.createElement("div");
+  pill.className = "modalPill";
+  pill.textContent = `Available: ${availablePotions.length}`;
+
+  titleWrap.appendChild(title);
+  titleWrap.appendChild(pill);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "btn btnSoft";
+  closeBtn.textContent = "✖";
+  closeBtn.addEventListener("click", () => {
+    try { playSfx("sfxClick", 0.35); } catch(e) {}
+    closePotionUseModal();
+  });
+
+  header.appendChild(titleWrap);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement("div");
+  body.className = "modalBody";
+
+  const tip = document.createElement("p");
+  tip.className = "modalText";
+  tip.innerHTML = "Choose one potion to consume. <b>Potions are global-cooldown</b> after use.";
+
+  const list = document.createElement("div");
+  list.className = "potionChoices";
+
+  (availablePotions || []).forEach((p) => {
+    const count = getPotionCount(p.id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "potionChoice";
+
+    const left = document.createElement("div");
+    left.className = "potionChoiceLeft";
+    left.innerHTML = `
+      <div class="potionChoiceName">${p.name} <span class="pill" style="margin-left:8px;">x${count}</span></div>
+      <div class="potionChoiceDesc">${p.desc || ""}</div>
+    `;
+
+    const right = document.createElement("div");
+    right.className = "potionChoiceRight";
+    right.textContent = `Use`;
+
+    btn.appendChild(left);
+    btn.appendChild(right);
+
+    btn.addEventListener("click", () => {
+      // Safety re-check (inventory/turn can change via edge cases)
+      if (state.phase !== "battle" || state.turn !== "player") {
+        try { showToast("You can only use potions on your turn (in battle).", "warn"); } catch (e) {}
+        closePotionUseModal();
+        return;
+      }
+      if (!isPotionReady()) {
+        try { showToast(`Potion cooldown: ${formatPotionCd()}`, "warn"); } catch (e) {}
+        closePotionUseModal();
+        return;
+      }
+      if (!consumePotion(p.id)) {
+        try { showToast("That potion is no longer available.", "warn"); } catch (e) {}
+        closePotionUseModal();
+        return;
+      }
+
+      applyPotionEffect(p);
+      setPotionCooldown(p.cooldownTurns || 10);
+
+      // feedback
+      try { playSfx("sfxSkill", 0.55); } catch(e) {}
+      try { if (typeof log === "function") log(`🧪 You used ${p.name}!`, "good"); } catch(e) {}
+      try { if (typeof floatingDamage === "function") floatingDamage("player", "🧪", "good"); } catch(e) {}
+
+      closePotionUseModal();
+      updateUI();
+    });
+
+    list.appendChild(btn);
+  });
+
+  body.appendChild(tip);
+  body.appendChild(list);
+
+  const actions = document.createElement("div");
+  actions.className = "modalActions single";
+
+  const cancel = document.createElement("button");
+  cancel.className = "btn btnGhost";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => {
+    try { playSfx("sfxClick", 0.35); } catch(e) {}
+    closePotionUseModal();
+  });
+  actions.appendChild(cancel);
+
+  box.appendChild(header);
+  box.appendChild(body);
+  box.appendChild(actions);
+  overlay.appendChild(box);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closePotionUseModal();
+  });
+
+  document.body.appendChild(overlay);
 }
 
 // =========================
@@ -4778,7 +5789,7 @@ function renderGallery() {
     div.className = "cardPick";
 
 
-    const enemyOnly = card.id === "cosmicGod";
+    const enemyOnly = !!card.enemyOnly;
     const lockTag = enemyOnly ? " 🔒" : "";
 
     div.innerHTML = `
@@ -4791,7 +5802,7 @@ function renderGallery() {
         <b>${card.skillName}:</b> ${card.skillDesc}
       </div>
 
-      ${enemyOnly ? `<div class="muted" style="margin-top:8px;"><b>Note:</b> Sealed by Gods (Enemy-only).</div>` : ``}
+      ${enemyOnly ? `<div class="muted" style="margin-top:8px;"><b>Note:</b> Enemy-only.</div>` : ``}
 
       <div class="muted" style="margin-top:8px;">
         <b>Enemy passive:</b> Can trigger automatically each round if this card is the enemy.
@@ -4880,7 +5891,10 @@ function rollLuckyReward() {
   const r = Math.random();
 
   // ✅ 1%: Card (Entity)
-  if (r < LUCKY_DRAW.legendaryChance) {
+  // Mission-gated: ONLY allow this drop after Mission 3 (Diablo defeated) unlocks Entity.
+  // Otherwise, treat it as a normal gold roll so missions stay consistent.
+  const entityDropAllowed = !!(state && state.missions && (state.missions.entityUnlocked || state.missions.entityDefeated) && isMission3Complete());
+  if (r < LUCKY_DRAW.legendaryChance && entityDropAllowed) {
     return {
       type: "card",
       id: "relicbornTitan",
@@ -5209,19 +6223,107 @@ function claimLuckyRewards() {
 // =========================
 // START / RESET
 // =========================
+function startOmniBossFight(optionalPlayerCardId) {
+  ensureMissionUnlockDefaults();
+  if (!state.missions || !state.missions.antiMatterDefeated) {
+    showToast("Complete Mission 6 (Defeat Anti-Matter) to unlock Omni.", "warn");
+    return;
+  }
+
+  const pickId = optionalPlayerCardId || state.player?.id || null;
+  if (!pickId) {
+    // Ask the player to pick a fighter first
+    state.pendingBoss = "omni";
+    showToast("Pick your fighter... then the portal opens.", "info");
+    try { showView("setup"); } catch(e) {}
+    try { if (typeof renderPick === "function") renderPick(); } catch(e) {}
+    return;
+  }
+
+  // Setup boss arena
+  state.duelMode = false;
+  state.storyBossFight = true;
+  state.stageLabel = "BOSS";
+  state.stage = 999;
+  state._awakenedSpawnedThisRun = true;
+  setBossArenaMode(true);
+
+  // Relics still apply
+  state.relics = state.equippedRelicId ? [state.equippedRelicId] : [];
+
+  const playerBase = findCardById(pickId);
+  state.player = cloneCard(playerBase);
+
+  const omniBase = buildOmniBoss();
+  state.enemy = cloneCard(omniBase);
+  // Boss aura
+  state.enemy.passiveEnabled = true;
+  state.enemy.aiType = "Aggressive";
+
+  state.player.shield = Math.min(getShieldCap(state.player), state.player.shield);
+  state.player.def = state.player.shield;
+
+  state.phase = "battle";
+  state.turn = "player";
+  state.round = 1;
+
+  // Potions fresh for boss
+  state.potionCooldownTurns = 0;
+  try { saveProgress(); } catch(e) {}
+
+  showView("game");
+  resetCardVisuals();
+  $("log").innerHTML = "";
+
+  // 🔥 Ultimate intro scene: conversation + stakes
+  const pName = state.player?.name || "Champion";
+  log("🌌 The Story Mode portal tears open...", "warn");
+  log("🕳️ Anti‑Matter: 'Creation does not surrender. It REFUSES.'", "good");
+  log(`${pName}: 'If the universe will be erased... then I'll fight for every second of it.'`, "good");
+  log("👑 Omni: 'All gods kneel. All worlds end. You are an error that learned to scream.'", "bad");
+  log("⚔️ The arena rewrites itself. Stats become LAW.", "warn");
+  log(`🔥 BOSS: Omni manifests — HP ${state.enemy.maxHp} • ATK ${state.enemy.atk} • DEF ${state.enemy.def}`, "warn");
+  log("✨ Ability unlocked: Gods Justice — TRUE damage that pierces straight to life.", "bad");
+
+  tryEnemyPassive();
+  updateUI();
+}
+
 function startGame(playerCardId) {
-  // ✅ Prevent picking Cosmic God as the player (enemy can still roll it randomly)
+  // Leaving duel mode when starting a normal run
+  state.duelMode = false;
+
+  // If a story boss fight was requested, picking a fighter should start the boss instead of a normal run.
+  if (state.pendingBoss === "omni") {
+    state.pendingBoss = null;
+    startOmniBossFight(playerCardId);
+    return;
+  }
+  // ✅ Prevent picking enemy-only cards as the player
   if (playerCardId === "cosmicGod") {
     alert("Cosmic God is sealed by the Gods and cannot be selected. (Enemy-only card)");
     return;
   }
+  if (playerCardId === "antiMatter") {
+    alert("Anti-Matter is awakened, but it is ENEMY-only and cannot be selected.");
+    return;
+  }
+
+  // Normal run resets story-boss state
+  state.storyBossFight = false;
+  state.stageLabel = "";
+  state._entitySpawnedThisRun = false;
+  state._awakenedSpawnedThisRun = false;
+  setBossArenaMode(false);
 
   state.stage = 1;
   state.relics = state.equippedRelicId ? [state.equippedRelicId] : [];
 
   const playerBase = findCardById(playerCardId);
   const all = getGalleryCards();
-  const pool = all.filter((c) => c.id !== playerCardId);
+  let pool = (all || []).filter((c) => c && c.id !== playerCardId);
+  // Safety: never allow an empty enemy pool (prevents rare "undefined enemy" bugs)
+  if (!pool.length) pool = (BASE_CARDS || []).filter((c) => c && c.id !== playerCardId);
   const enemyBase = pool[Math.floor(Math.random() * pool.length)];
 
   state.player = cloneCard(playerBase);
@@ -5260,6 +6362,8 @@ $("log").innerHTML = "";
 function resetAll() {
   closeModal();
     resetCardVisuals();
+  // Reset special modes
+  state.duelMode = false;
 state.phase = "pick";
   state.turn = "player";
   state.round = 1;
@@ -5299,6 +6403,17 @@ function bootGameUI() {
     return;
   }
 
+  // Omni victory: Back to Story
+  if (state.modalAction === "omni") {
+    state.modalAction = null;
+    const btnNext = $("btnNextEnemy");
+    if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
+    const btnPlay = $("btnPlayAgain");
+    if (btnPlay) btnPlay.textContent = "🔄 Restart Run";
+    showView("story");
+    return;
+  }
+
   // (Legacy) Shop flow
   if (state.modalAction === "shop") {
     state.modalAction = null;
@@ -5317,12 +6432,24 @@ function bootGameUI() {
   });
   safeOn("btnPlayAgain", () => {
   playSfx("sfxClick", 0.45);
+  // Omni victory: Go Home
+  if (state.modalAction === "omni") {
+    state.modalAction = null;
+    const btnNext = $("btnNextEnemy");
+    if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
+    const btnPlay = $("btnPlayAgain");
+    if (btnPlay) btnPlay.textContent = "🔄 Restart Run";
+    closeModal();
+    resetAll();
+    showView("home");
+    return;
+  }
   state.modalAction = null;
   const btnNext = $("btnNextEnemy");
   if (btnNext) btnNext.textContent = "⚔️ Next Enemy";
   closeModal();
   resetAll();
-  });
+});
 
   safeOn("btnAttack", () => { playSfx("sfxClick", 0.35); playerAttack(); });
   safeOn("btnSkill", () => { playSfx("sfxClick", 0.35); playerSkill(); });
@@ -5361,6 +6488,10 @@ function bootGameUI() {
   safeOn("btnStoryBackHome", () => { playSfx("sfxClick", 0.35); showView("home"); });
   safeOn("btnStoryPrev", () => { playSfx("sfxClick", 0.25); storyPrev(); });
   safeOn("btnStoryNext", () => { playSfx("sfxClick", 0.25); storyNext(); });
+  safeOn("btnFightBossNow", () => {
+    playSfx("sfxClick", 0.55);
+    startOmniBossFight();
+  });
 
   // =========================
   // COSMO REVELATION UNLOCK MODAL
@@ -5382,6 +6513,9 @@ function bootGameUI() {
   safeOn("btnShopProfile", () => { playSfx("sfxClick", 0.45); openProfile("shop"); });
   safeOn("btnGameProfile", () => { playSfx("sfxClick", 0.45); openProfile("game"); });
   safeOn("btnProfileBackHome", () => { playSfx("sfxClick", 0.45); showView(_profilePrevView || "home"); });
+
+  // ⚔️ 1v1 Quick Duel
+  safeOn("btnProfile1v1", () => { playSfx("sfxClick", 0.35); openDuelModal(); });
 
   // 🤫 Secrets (upgrade non-shop cards)
   safeOn("btnProfileSecrets", () => { playSfx("sfxClick", 0.35); openSecretsModal(); });
@@ -5435,6 +6569,7 @@ function bootGameUI() {
   safeOn("btnStoryBackHome", () => { playSfx("sfxClick", 0.35); showView("home"); });
   safeOn("btnStoryPrev", () => { playSfx("sfxClick", 0.25); storyPrev(); });
   safeOn("btnStoryNext", () => { playSfx("sfxClick", 0.35); storyNext(); });
+  safeOn("btnFightBossNow", () => { playSfx("sfxClick", 0.55); startOmniBossFight(); });
 
   // Click outside closes redeem reveal
   const redeemRevealModal = document.getElementById("redeemRevealModal");
@@ -5509,40 +6644,44 @@ let tutorialStepIndex = 0;
 
 const TUTORIAL_STEPS = [
   {
-    title: "Welcome!",
-    text: "This is a Cosmic Card Wars Survival game. Pick a card, fight enemies, earn gold, buy stronger cards and relics to survive longer."
+    title: "Welcome to the Arena",
+    text: "Choose a fighter card, then survive an endless chain of enemies. Your Life and Armor carry over between stages — so every decision matters."
   },
   {
-    title: "Normal Attack",
-    text: "Your normal attack deals your card's Damage. It hits Armor first if the enemy has Armor."
+    title: "Before You Fight",
+    text: "From Home, tap Battle → Setup/Pick to choose your champion. Each card shows Damage (ATK), Armor (DEF), Life (HP), and an Ability."
   },
   {
-    title: "Armor vs HP",
-    text: "Armor (Defense) blocks damage first. If Armor > 0, damage reduces Armor ONLY (no HP overflow in the same hit)."
+    title: "Turns & Actions",
+    text: "On your turn you can: Attack, use your Ability, use a Potion, then End Turn. Enemies act on their turn automatically."
   },
   {
-    title: "Abilities / Skills",
-    text: "Each card has 1 ability. Skills usually have cooldowns (example: cooldown 2 means you must wait turns before using again)."
+    title: "Armor vs Life (Important)",
+    text: "Armor blocks damage first. If Armor is above 0, a hit reduces Armor ONLY (no HP overflow on the same hit). Some effects deal TRUE damage that ignores Armor."
+  },
+  {
+    title: "Abilities & Effects",
+    text: "Each card has 1 signature Ability. Abilities can heal, break armor, stun/freeze, poison, silence, or boost stats. Read each card’s Ability text — it’s the main win condition."
   },
   {
     title: "Cooldowns",
-    text: "After using a skill, it goes on cooldown. Some Legendary cards use real-time cooldown timers too."
+    text: "After you use an Ability it goes on cooldown (turn-based). Some legendary effects may also use real-time cooldown timers — both are shown in battle."
   },
   {
-    title: "Cards",
-    text: "Cards have: Damage, Armor, Life, and Ability. Stronger cards can be bought from the Shop using Gold."
+    title: "Potions",
+    text: "Potions are used during battle (your turn only). After using one, all potions share a global cooldown. Stock up in Shop → 🧪 Potions."
   },
   {
-    title: "Gold & Shop",
-    text: "Win battles to earn Gold. Spend Gold to buy new playable cards or upgrade your owned cards."
+    title: "Relics",
+    text: "Relics are powerful passive items (lifesteal, reflect, revive, extra gold, etc.). You can equip only ONE relic at a time — choose based on your build."
   },
   {
-    title: "Relics / Items",
-    text: "Relics give bonuses like lifesteal, more armor cap, reflect damage, and more. Only 1 relic can be equipped."
+    title: "Gold, Shop & Upgrades",
+    text: "Win battles to earn Gold. Spend it in Shop to buy cards, potions, relics, and upgrades. Upgrades improve a card’s stats across runs."
   },
   {
-    title: "Win Condition",
-    text: "Defeat the enemy before your Life hits 0. Keep pushing higher stages and build your strongest setup!"
+    title: "Modes & Progress",
+    text: "Endless Battle is the core loop. Profile has 1v1 Quick Duel. Story Mode reveals lore and missions — secret cards unlock when you clear milestones."
   }
 ];
 
