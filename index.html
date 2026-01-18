@@ -42,7 +42,7 @@
           </div>
         </div>
 
-        <h1 class="heroTitle">Pick a Card. <span class="glow">Survive.</span></h1>
+        <h1 class="heroTitle">Choose your Champion. <span class="glow">Defy the Void.</span></h1>
         <p class="heroSub">
           Endless enemies. Your HP and Defense carry over. Earn gold. Buy relics + upcoming cards.
         </p>
@@ -79,6 +79,7 @@
         </div>
 
         <div class="topbarActions">
+          <button class="btn btnSoft" id="btnProfile1v1">⚔️ 1v1</button>
           <button class="btn btnSoft" id="btnProfileSecrets">🤫 Secrets</button>
           <button class="btn btnGhost" id="btnProfileToBattle">⚔️ Battle</button>
           <button class="btn btnGhost" id="btnProfileToShop">🛒 Shop</button>
@@ -108,6 +109,21 @@
             <div class="muted" id="rankProgressNums">0 / 0</div>
           </div>
           <div class="rankBar"><div class="rankBarFill" id="rankBarFill"></div></div>
+        </div>
+
+        <!-- 👑 Legend Reward (preview + unlock status) -->
+        <div class="legendRewardBox" id="legendRewardBox" data-unlocked="0">
+          <div class="legendRewardTop">
+            <div>
+              <div class="muted" style="font-weight:900;letter-spacing:.3px;">LEGEND REWARD</div>
+              <div class="legendRewardTitle">Diablo</div>
+            </div>
+            <span class="pill legendRewardPill">Legend</span>
+          </div>
+          <div class="legendRewardBody">
+            <img id="legendRewardImg" class="legendRewardImg" src="cards/diablo.png" alt="Diablo reward" />
+            <div class="legendRewardText" id="legendRewardText">Reach <b>Legend</b> rank to unlock <b>Diablo</b>.</div>
+          </div>
         </div>
 
         <div class="profileStatsGrid">
@@ -295,7 +311,8 @@
           <div class="storyBossInner">
             <div class="storyBossTag">⚔️ BOSS FIGHT</div>
             <div class="storyBossTitle">GOD OF ALL GODS</div>
-            <div class="storyBossSub">COMING SOON</div>
+            <div class="storyBossSub" id="storyBossSub">Complete Mission 6 to unlock</div>
+            <button class="btn btnPrimary big" id="btnFightBossNow" disabled>⚔️ Fight Boss Now</button>
           </div>
         </div>
 
@@ -462,17 +479,23 @@
         </div>
 
         <div class="sidePanel">
+          <!-- ✅ Battle quick stats (replaces Quick Guide) -->
           <div class="panelCard">
             <div class="panelTitle">
-              <h3>Tip</h3>
-              <span class="pill">Quick Guide</span>
+              <h3>Player</h3>
+              <span class="pill">Rank & XP</span>
             </div>
 
-            <ul class="tipList">
-              <li><b>Defense</b> absorbs damage first.</li>
-              <li><b>Relics</b> are bought in shop and auto-equip.</li>
-              <li><b>Enemy AI</b> changes behavior each stage.</li>
-            </ul>
+            <div class="battleQuickStats">
+              <div class="battleQuickRow">
+                <span class="battleQuickLabel">Rank</span>
+                <span class="pill" id="battleRankPill">Rank: Rookie</span>
+              </div>
+              <div class="battleQuickRow">
+                <span class="battleQuickLabel">XP</span>
+                <span class="pill" id="battleXpPill">XP: 0</span>
+              </div>
+            </div>
           </div>
 
           <div class="panelCard">
