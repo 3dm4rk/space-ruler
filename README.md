@@ -154,9 +154,9 @@ flowchart TD
 > Add your screenshots to `assets/` and update the links below.
 
 ```md
-![Home](assets/screenshot-home.png)
-![Battle](assets/screenshot-battle.png)
-![Shop](assets/screenshot-shop.png)
+![Home](assets/home.png)
+![Battle](assets/battle.png)
+![Shop](assets/shop.png)
 ```
 
 ---
