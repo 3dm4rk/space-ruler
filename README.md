@@ -159,7 +159,7 @@ flowchart TD
 ![ccw Screenshot](assets/shop.png)
 ```
 
-
+---
 
 ## 🧾 License
 
