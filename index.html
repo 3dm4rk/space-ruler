@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Cosmic Card Wars</title>
+<link href="styles.css" rel="stylesheet"/>
+</head>
+<body>
+  <div class="siteBg" aria-hidden="true">
+    <div class="siteNebula"></div>
+    <div class="siteStars"></div>
+    <div class="siteParticles" aria-hidden="true"></div>
+    <div class="siteShooting" aria-hidden="true"></div>
+  </div>
+
+<!-- 🏅 RANK UP OVERLAY (animation) -->
+<div class="rankUpOverlay" id="rankUpOverlay" style="display:none;">
+<div class="rankUpFlare"></div>
+<div class="rankUpCard">
+<div class="rankUpTop">
+<button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+<button class="btn btnSoft btnWhatsNew" aria-label="What's New / Patch Notes">🆕 What's New</button>
+<div class="rankUpTitle">🏅 RANK UP!</div>
+<div class="rankUpSub" id="rankUpSub">Rookie → Bronze</div>
+</div>
+<div class="rankUpBadge" id="rankUpBadge">Bronze</div>
+<div class="rankUpUnlocks" id="rankUpUnlocks"></div>
+<div class="rankUpHint">New cosmetics may have unlocked ✨</div>
+</div>
+</div>
+
+<!-- 🌌 ARENA ANNOUNCER OVERLAY (Void Collapse / global events) -->
+<div id="arenaOverlayBack" class="arenaOverlayBack" aria-hidden="true"></div>
+<div id="arenaOverlay" class="arenaOverlay" aria-live="assertive" aria-atomic="true"></div>
+
+<!-- HOME -->
+<div class="screen" id="home">
+<div class="wrap hero">
+<div class="heroCard">
+<div class="heroTop">
+<div class="brand">
+<div class="brandDot"></div>
+<span class="brandName">Cosmic Card Wars</span>
+</div>
+<div class="heroTopRight">
+<span class="pill" id="homeGoldTag">Gold: 0</span>
+<button class="btn btnGhost" id="btnHomeProfile">👤 Profile</button>
+<button class="btn btnGhost" id="btnHomeShop">🛒 Shop</button>
+<button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+<button class="btn btnSoft btnWhatsNew" aria-label="What's New / Patch Notes">🆕 What's New</button>
+</div>
+</div>
+<h1 class="heroTitle">Choose your Champion. <span class="glow">Defy the Void.</span></h1>
+<p class="heroSub">
+          Endless enemies. Your HP and Defense carry over. Earn gold. Buy relics + upcoming cards.
+        </p>
+<div class="heroActions">
+<button class="btn btnPrimary" id="btnBattleNow">⚔️ Battle Now</button>
+<button class="btn btnPrimary" id="btnPvp">🎮 PVP</button>
+<button class="btn btnGhost" id="btnOpenGallery">🃏 Gallery</button>
+<button class="btn btnSoft" id="btnStoryMode">📜 Story Mode</button>
+</div>
+<!-- ✅ Missions (text only guide) -->
+<div class="missionText" id="missionText"></div>
+<div class="heroHints">
+<div class="hint">🛡️ Defense absorbs damage first</div>
+<div class="hint">🪬 Relics can be bought</div>
+<div class="hint">🛒 Shop = relics + future cards</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PROFILE -->
+<div class="screen" id="profile" style="display:none;">
+<div class="wrap">
+  <div id="arenaAlert" class="arenaAlert" aria-live="polite"></div>
+<div class="topbar">
+<div>
+<div class="titleRow">
+<h2 class="pageTitle">Profile</h2>
+<span class="pill" id="profileRankPill">Rank: Rookie</span>
+<span class="pill" id="profileXpPill">XP: 0</span>
+</div>
+<p class="muted" style="margin:6px 0 0;">Your progress is saved on this device.</p>
+</div>
+<div class="topbarActions">
+<button class="btn btnSoft" id="btnProfile1v1">⚔️ 1v1</button>
+<button class="btn btnSoft" id="btnProfileSecrets">🤫 Secrets</button>
+<button class="btn btnGhost" id="btnProfileToBattle">⚔️ Battle</button>
+<button class="btn btnGhost" id="btnProfileToShop">🛒 Shop</button>
+<button class="btn btnGhost" id="btnProfileBackHome">🏠 Home</button>
+</div>
+</div>
+<div class="profileCard">
+<div class="profileTop">
+<div>
+<div class="muted" style="font-weight:900;letter-spacing:.3px;">PLAYER NAME</div>
+<div class="profileNameRow">
+<input class="profileInput" id="profileNameInput" maxlength="18" placeholder="Your name"/>
+<button class="btn btnPrimary" id="btnSaveProfileName">Save</button>
+</div>
+<div class="muted" style="margin-top:6px;">Tip: this is your account label (doesn’t rename the fighter card).</div>
+</div>
+<div class="profileRight">
+<div class="profileAvatar" id="profileAvatar">✨</div>
+<div class="rankBadge" id="rankBadge">Rookie</div>
+</div>
+</div>
+<div class="rankProgress">
+<div class="rankProgressTop">
+<div class="muted" id="rankProgressLabel">Next rank: —</div>
+<div class="muted" id="rankProgressNums">0 / 0</div>
+</div>
+<div class="rankBar"><div class="rankBarFill" id="rankBarFill"></div></div>
+</div>
+<!-- 👑 Legend Reward (preview + unlock status) -->
+<div class="legendRewardBox" data-unlocked="0" id="legendRewardBox">
+<div class="legendRewardTop">
+<div>
+<div class="muted" style="font-weight:900;letter-spacing:.3px;">LEGEND REWARD</div>
+<div class="legendRewardTitle">Diablo</div>
+</div>
+<span class="pill legendRewardPill">Legend</span>
+</div>
+<div class="legendRewardBody">
+<img alt="Diablo reward" class="legendRewardImg" id="legendRewardImg" src="cards/diablo.png"/>
+<div class="legendRewardText" id="legendRewardText">Reach <b>Legend</b> rank to unlock <b>Diablo</b>.</div>
+</div>
+</div>
+<div class="profileStatsGrid">
+<div class="statCard">
+<div class="statLabel">Wins</div>
+<div class="statValue" id="statWins">0</div>
+</div>
+<div class="statCard">
+<div class="statLabel">Losses</div>
+<div class="statValue" id="statLosses">0</div>
+</div>
+<div class="statCard">
+<div class="statLabel">Best Streak</div>
+<div class="statValue" id="statBestStreak">0</div>
+</div>
+<div class="statCard">
+<div class="statLabel">Highest Stage</div>
+<div class="statValue" id="statHighStage">0</div>
+</div>
+</div>
+<!-- 🎨 Cosmetics (unlock by rank) -->
+<div class="cosmeticsSection">
+<div class="cosmeticsHeader">
+<h3 class="cosmeticsTitle">Cosmetics</h3>
+<div class="cosmeticsHeaderRight">
+<span class="pill">Unlock by rank</span>
+<div aria-label="Cosmetics navigation" class="cosmeticsNav">
+<button class="miniTab miniTabActive" id="cosNavAvatar" type="button">✨ Avatar</button>
+<button class="miniTab" id="cosNavFrame" type="button">🖼️ Frame</button>
+<button class="miniTab" id="cosNavSkin" type="button">🎨 Skin</button>
+<button class="miniTab" id="cosNavAura" type="button">✨ Aura</button>
+<button class="miniTab" id="cosNavBg" type="button">🖼️ Arena</button>
+</div>
+</div>
+</div>
+<div class="cosmeticsBlock" id="avatarBlock">
+<div class="muted" style="font-weight:900;letter-spacing:.3px;">AVATAR</div>
+<div class="cosmeticsGrid" id="avatarGrid"></div>
+</div>
+<div class="cosmeticsBlock" id="frameBlock" style="margin-top:12px; display:none;">
+<div class="muted" style="font-weight:900;letter-spacing:.3px;">CARD FRAME</div>
+<div class="cosmeticsGrid" id="frameGrid"></div>
+<div class="muted" style="margin-top:8px;">Frames apply to your player card in battle.</div>
+</div>
+</div>
+<div class="cosmeticsBlock" id="skinBlock" style="margin-top:12px; display:none;">
+  <div class="muted" style="font-weight:900;letter-spacing:.3px;">SKIN</div>
+  <div class="cosmeticsGrid" id="skinGrid"></div>
+  <div class="muted" style="margin-top:8px;">Skins add a visual filter to your player card frame.</div>
+</div>
+<div class="cosmeticsBlock" id="auraBlock" style="margin-top:12px; display:none;">
+  <div class="muted" style="font-weight:900;letter-spacing:.3px;">AURA</div>
+  <div class="cosmeticsGrid" id="auraGrid"></div>
+  <div class="muted" style="margin-top:8px;">Auras add a glow effect around your player card in battle.</div>
+</div>
+<div class="cosmeticsBlock" id="bgBlock" style="margin-top:12px; display:none;">
+  <div class="muted" style="font-weight:900;letter-spacing:.3px;">ARENA BACKGROUND</div>
+  <div class="cosmeticsGrid" id="bgGrid"></div>
+  <div class="muted" style="margin-top:8px;">Backgrounds apply to your Battle Arena.</div>
+</div>
+<div class="profileFoot">
+<div class="muted">Equipped relic:</div>
+<div class="profileRelic" id="profileRelic">None</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SHOP -->
+<div class="screen" id="shop" style="display:none;">
+<div class="wrap">
+<div class="topbar">
+<div>
+<div class="titleRow">
+<h2 class="pageTitle">Shop</h2>
+<span class="pill" id="shopGoldTag">Gold: 0</span>
+</div>
+<p class="muted">Buy relics (auto-equip + saved) and upcoming cards (Owned for later).</p>
+<!-- ✅ Tabs -->
+<div class="shopTabs">
+<button class="tabBtn tabActive" id="tabShopRelics">🪬 Relics</button>
+<button class="tabBtn" id="tabShopCards">🃏 Upcoming Cards</button>
+<button class="tabBtn" id="tabShopPotions">🧪 Potions</button>
+<button class="tabBtn" id="tabShopLucky">🎰 Lucky Draw</button>
+</div>
+</div>
+<div class="topbarActions">
+<button class="btn btnSoft" id="btnRedeemCode">🎁 Redeem Code</button>
+<button class="btn btnGhost" id="btnShopProfile">👤 Profile</button>
+<button class="btn btnGhost" id="btnShopBackHome">🏠 Home</button>
+<button class="btn btnGhost" id="btnShopToBattle">⚔️ Battle</button>
+</div>
+</div>
+<!-- Relics tab -->
+<div id="shopRelicsWrap">
+<div class="shopGrid" id="shopRelicGrid"></div>
+</div>
+<!-- Cards tab -->
+<div id="shopCardsWrap" style="display:none;">
+  <div class="filterRow" id="shopRarityControls">
+    <div class="filterGroup">
+      <span class="filterLabel">Filter:</span>
+      <select id="shopRarityFilter" class="filterSelect" aria-label="Filter shop cards by rarity">
+        <option value="All">All Rarities</option>
+        <option value="Common">Common</option>
+        <option value="Rare">Rare</option>
+        <option value="Epic">Epic</option>
+        <option value="Mythical">Mythical</option>
+        <option value="Legendary">Legendary</option>
+        <option value="Cosmic">Cosmic</option>
+      </select>
+    </div>
+    <div class="filterGroup">
+      <span class="filterLabel">Sort:</span>
+      <select id="shopRaritySort" class="filterSelect" aria-label="Sort shop cards">
+        <option value="default">Default</option>
+        <option value="rarityDesc">Rarity (Cosmic → Common)</option>
+        <option value="rarityAsc">Rarity (Common → Cosmic)</option>
+        <option value="priceAsc">Price (Low → High)</option>
+        <option value="priceDesc">Price (High → Low)</option>
+        <option value="nameAsc">Name (A → Z)</option>
+      </select>
+    </div>
+  </div>
+  <div class="shopGrid" id="shopGrid"></div>
+</div>
+<!-- Potions tab -->
+<div id="shopPotionsWrap" style="display:none;">
+<div class="shopGrid" id="shopPotionGrid"></div>
+</div>
+<!-- Lucky Draw tab -->
+<div id="shopLuckyWrap" style="display:none;">
+<div class="luckyWrap">
+<div class="luckyHeader">
+<div>
+<h3 class="luckyTitle">🎰 Lucky Draw</h3>
+<p class="muted" style="margin:6px 0 0;">Spin for rewards. 1% chance to pull the <b>new Siyokou</b> card.</p>
+</div>
+<div class="luckyCosts">
+<span class="pill">Single: 2000 Gold</span>
+<span class="pill">5x: 10000 Gold</span>
+</div>
+</div>
+<div class="luckyMachine" id="luckyMachine">
+<div class="luckyWheel" id="luckyWheel">
+<div class="luckyGlow"></div>
+<div class="luckyCenter">
+<img alt="Best reward card" class="luckyWheelCard" src="cards/siyokou.png"/>
+</div>
+</div>
+<div class="luckyActions">
+<button class="btn btnPrimary big" id="btnLuckySingle">🎟️ Draw 1</button>
+<button class="btn btnSoft big" id="btnLuckyFive">🎟️ Draw 5</button>
+</div>
+<div class="luckyOdds">
+<div class="oddsRow"><span class="badge">1%</span> Card (Siyokou)</div>
+<div class="oddsRow"><span class="badge">99%</span> Gold Reward</div>
+<div class="oddsRow muted" style="margin-top:6px;">
+                Gold pool: 1 - 100
+              </div>
+</div>
+</div>
+<div class="luckyResults" id="luckyResults"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- GALLERY -->
+<div class="screen" id="gallery" style="display:none;">
+<div class="wrap">
+<div class="topbar">
+<div>
+<div class="titleRow">
+<h2 class="pageTitle">Gallery</h2>
+<span class="pill">All Fighters</span>
+</div>
+<p class="muted">See full card stats + skills.</p>
+<div class="filterRow" id="galleryRarityControls">
+  <div class="filterGroup">
+    <span class="filterLabel">Filter:</span>
+    <select id="galleryRarityFilter" class="filterSelect" aria-label="Filter gallery by rarity">
+      <option value="All">All Rarities</option>
+      <option value="Common">Common</option>
+      <option value="Rare">Rare</option>
+      <option value="Epic">Epic</option>
+      <option value="Mythical">Mythical</option>
+      <option value="Legendary">Legendary</option>
+      <option value="Cosmic">Cosmic</option>
+    </select>
+  </div>
+  <div class="filterGroup">
+    <span class="filterLabel">Sort:</span>
+    <select id="galleryRaritySort" class="filterSelect" aria-label="Sort gallery">
+      <option value="default">Default</option>
+      <option value="rarityDesc">Rarity (Cosmic → Common)</option>
+      <option value="rarityAsc">Rarity (Common → Cosmic)</option>
+      <option value="nameAsc">Name (A → Z)</option>
+    </select>
+  </div>
+</div>
+</div>
+<div class="topbarActions">
+<button class="btn btnPrimary" id="btnGalleryToBattle">⚔️ Battle</button>
+<button class="btn btnGhost" id="btnBackHomeFromGallery">🏠 Home</button>
+</div>
+</div>
+<div class="grid" id="galleryGrid"></div>
+</div>
+</div>
+<!-- STORY MODE -->
+<div class="screen" id="story" style="display:none;">
+<div class="wrap">
+<div class="topbar">
+<div>
+<div class="titleRow">
+<h2 class="pageTitle">Story Mode</h2>
+<span class="pill" id="storyPagePill">Page 1</span>
+</div>
+<p class="muted" id="storySubtitle">The origin of Cosmo… and why the universe fights for glory.</p>
+</div>
+<div class="topbarActions">
+<button class="btn btnGhost" id="btnStoryBackHome">🏠 Home</button>
+</div>
+</div>
+<div class="storyCard" id="storyCard">
+  <!-- 🖼️ Story image (Phase 1 pages) -->
+  <img class="storyImg" id="storyImg" alt="Story scene" src="" style="display:none;"/>
+<div class="storyTitle" id="storyTitle">—</div>
+<div class="storyBody" id="storyBody">—</div>
+<!-- 🌌 Boss preview (shows only on final page) -->
+<div class="storyBossWrap" id="storyBossWrap" style="display:none;">
+<div aria-hidden="true" class="storyBossPortal"></div>
+<div class="storyBossInner">
+<div class="storyBossTag" id="storyBossTag">⚔️ BOSS FIGHT</div>
+<div class="storyBossTitle" id="storyBossTitle">GOD OF ALL GODS</div>
+<div class="storyBossSub" id="storyBossSub">Complete Mission 11 to unlock</div>
+<!-- ✅ Optional preview image (used by Story Mode Phase 2) -->
+<img alt="Story preview" class="storyBossImg" id="storyBossImg" src="" style="display:none;"/>
+<button class="btn btnPrimary big" disabled="" id="btnFightBossNow">⚔️ Fight Boss Now</button>
+</div>
+</div>
+<div class="storyFooter">
+<button class="btn btnGhost" id="btnStoryPrev">⬅️ Back</button>
+<button class="btn btnPrimary" id="btnStoryNext">Next ➡️</button>
+</div>
+</div>
+</div>
+</div>
+<!-- SETUP -->
+<div class="screen" id="setup" style="display:none;">
+<div class="wrap">
+<div class="topbar">
+<div>
+<div class="titleRow">
+<h2 class="pageTitle">Choose Your Fighter</h2>
+<span class="pill">Tap a card to start</span>
+</div>
+<p class="muted">Your stats carry through the entire run.</p>
+</div>
+<div class="topbarActions">
+<button class="btn btnGhost" id="btnSetupGallery">🃏 Gallery</button>
+<button class="btn btnGhost" id="btnBackHomeFromSetup">🏠 Home</button>
+</div>
+</div>
+<div class="grid" id="pickGrid"></div>
+</div>
+</div>
+<!-- GAME -->
+<div class="screen" id="game" style="display:none;">
+<div class="wrap">
+<div class="gameTop">
+<div class="gameTopLeft">
+<div class="titleRow">
+<h2 class="pageTitle">Battle Arena</h2>
+<span class="pill" id="stageTag">Stage: 1</span>
+<span class="pill" id="roundTag">Round: 1</span>
+<span class="pill" id="turnTag">Turn: Player</span>
+<span class="pill" id="enemyPassiveTag">Enemy Passive: 35%</span>
+<span class="pill" id="enemyAiTag">Enemy AI: Aggressive</span>
+<span class="pill" id="goldTag">Gold: 0</span>
+</div>
+<p class="muted">Relics bought from shop auto-equip and stay for future runs.</p>
+</div>
+<div class="gameTopActions">
+<button class="btn btnGhost" id="btnOpenShop">🛒 Shop</button>
+<button class="btn btnSoft btnHowToPlay">📖 How to Play</button>
+<button class="btn btnSoft btnWhatsNew" aria-label="What's New / Patch Notes">🆕 What's New</button>
+<button class="btn btnGhost" id="btnGameProfile">👤 Profile</button>
+<button class="btn btnGhost" id="btnReset">🔁 Restart Run</button>
+<button class="btn btnGhost" id="btnExitToHome">🏠 Home</button>
+</div>
+</div>
+<div class="gameGrid">
+<div class="arenaCard" id="arenaCard">
+<div class="arenaVignette" aria-hidden="true"></div>
+<div class="fighters">
+<div class="fighterCard player" id="playerCard">
+<div class="fighterHeader">
+<div class="fighterName">
+<span class="roleTag rolePlayer">PLAYER</span>
+<h3 id="pName">Player</h3>
+<span class="rarityPill" id="pRarity">Common</span>
+</div>
+<div class="skillTools">
+<span class="skillPill" id="pSkillTag">Skill</span>
+<button aria-label="Player ability info" class="infoBtn" id="pInfo" type="button">i</button>
+</div>
+</div>
+<div class="imgFrame" id="pFrame">
+<img alt="Player card" class="cardImg" id="pImg" src=""/>
+<div aria-label="Player current stats" class="statIcons underImg">
+<span class="statIcon" title="Attack">⚔️ <b id="pATKIcon">0</b></span>
+<span class="statIcon" title="Defense">🛡️ <b id="pDEFIcon">0</b></span>
+<span class="statIcon" title="Health">❤️ <b id="pHPIcon">0/0</b></span>
+</div>
+<div aria-label="Player status effects" class="statusIcons underImg" id="pStatusIcons"></div>
+</div>
+
+<div class="chips">
+<span class="chip">Status: <b id="pStatus">None</b></span>
+</div>
+</div>
+<div class="fighterCard enemy" id="enemyCard">
+<div class="fighterHeader">
+<div class="fighterName">
+<span class="roleTag roleEnemy">ENEMY</span>
+<h3 id="eName">Enemy</h3>
+<span class="rarityPill" id="eRarity">Common</span>
+</div>
+<div class="skillTools">
+<span class="skillPill" id="eSkillTag">Skill</span>
+<button aria-label="Enemy ability info" class="infoBtn" id="eInfo" type="button">i</button>
+</div>
+</div>
+<div class="imgFrame" id="eFrame">
+<img alt="Enemy card" class="cardImg" id="eImg" src=""/>
+<div aria-label="Enemy current stats" class="statIcons underImg">
+<span class="statIcon" title="Attack">⚔️ <b id="eATKIcon">0</b></span>
+<span class="statIcon" title="Defense">🛡️ <b id="eDEFIcon">0</b></span>
+<span class="statIcon" title="Health">❤️ <b id="eHPIcon">0/0</b></span>
+</div>
+<div aria-label="Enemy status effects" class="statusIcons underImg" id="eStatusIcons"></div>
+</div>
+
+<div class="chips">
+<span class="chip">Status: <b id="eStatus">None</b></span>
+</div>
+</div>
+</div>
+    <!-- combat feed removed -->
+
+
+<div class="actionDock">
+<button class="btn btnPrimary big" id="btnAttack">⚔️ Attack</button>
+<button class="btn btnSoft big" id="btnSkill">✨ Use Skill</button>
+<button class="btn btnGhost big" id="btnEnd">⏭️ End Turn</button>
+<button class="btn btnGhost big" id="btnPotion">🧪 Use Potion</button>
+</div>
+</div>
+<div class="sidePanel">
+<div class="panelCard">
+<div class="panelTitle">
+<h3>Battle Log</h3>
+<span class="pill">Live</span>
+</div>
+<div class="log" id="log"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SURVIVAL RESULT MODAL -->
+<div class="modalOverlay" id="resultModal" style="display:none;">
+<div class="modalBox">
+<div class="modalHeader">
+<div class="modalTitle" id="resultTitle">Victory!</div>
+<div class="modalPill" id="resultStage">Stage 1</div>
+</div>
+<div class="modalBody">
+<p class="modalText" id="resultText">You defeated the enemy!</p>
+<!-- ✅ Defeat modal cleanup: removed Gold / Total / HP / Shield blocks -->
+<div class="modalHint" id="modalHint">Next enemy incoming...</div>
+</div>
+<div class="modalActions">
+<button class="btn btnSoft big" id="btnNextEnemy">⚔️ Next Enemy</button>
+<button class="btn btnPrimary big" id="btnRematch" style="display:none;">🔁 Rematch</button>
+<button class="btn btnGhost big" id="btnPlayAgain">🔁 Restart Run</button>
+</div>
+</div>
+</div>
+<!-- 🎰 LUCKY DRAW MODAL -->
+<div class="modalOverlay" id="luckyModal" style="display:none;">
+<div class="modalBox luckyModalBox">
+<div class="modalHeader">
+<div class="modalTitle" id="luckyModalTitle">🎰 Lucky Draw</div>
+<div class="modalPill" id="luckyModalPill">Result</div>
+</div>
+<div class="modalBody">
+<!-- ✅ upgraded: multi-draw progress + mini reveals -->
+<div class="luckyProgress" id="luckyProgress" style="display:none;">
+<span class="pill" id="luckyProgressPill">1 / 5</span>
+<span class="muted" id="luckyProgressText">Multi draw</span>
+</div>
+<div class="luckyReveal">
+<div class="luckyCard" id="luckyCardReveal">
+<div class="luckyCardTop">
+<div class="luckyCardName" id="luckyRewardName">Reward</div>
+<div class="pill" id="luckyRewardRarity">Common</div>
+</div>
+<div class="luckyCardBody" id="luckyRewardBody">
+<div class="muted">Your reward appears here.</div>
+</div>
+</div>
+</div>
+<div class="luckyMultiStrip" id="luckyMultiStrip" style="display:none;"></div>
+<p class="modalHint" id="luckyModalHint">Tap claim to add it to your account.</p>
+</div>
+<div class="modalActions">
+<button class="btn btnPrimary big" id="btnLuckyClaim">✨ Claim</button>
+<button class="btn btnGhost big" id="btnLuckyClose">Close</button>
+</div>
+</div>
+</div>
+
+<!-- 🌟 LEGENDARY JACKPOT MODAL (1% Lucky Draw reward) -->
+<div class="modalOverlay" id="jackpotModal" style="display:none;">
+  <div class="modalBox jackpotBox" role="dialog" aria-modal="true" aria-label="Legendary Jackpot">
+    <div class="jackpotRays" aria-hidden="true"></div>
+    <div class="jackpotSparkle" aria-hidden="true"></div>
+
+    <div class="jackpotContent">
+      <div class="jackpotBadge">🌟 1% JACKPOT</div>
+      <div class="jackpotTitle" id="jackpotTitle">LEGENDARY UNLOCKED!</div>
+      <div class="jackpotSub" id="jackpotSub">You hit the rarest drop.</div>
+
+      <div class="jackpotShowcase" id="jackpotShowcase">
+        <!-- Filled by JS -->
+      </div>
+
+      <div class="jackpotHint">Tap continue to reveal your full results.</div>
+
+      <div class="modalActions single jackpotActions">
+        <button class="btn btnPrimary big" id="btnJackpotContinue">🔥 Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 🎁 REDEEM REVEAL MODAL (shows card image + ability after redeem) -->
+<div class="modalOverlay" id="redeemRevealModal" style="display:none;">
+<div class="modalBox redeemRevealBox">
+<div class="modalHeader">
+<div class="modalTitle" id="redeemRevealTitle">🎁 Code Redeemed!</div>
+<div class="modalPill" id="redeemRevealPill">Unlocked</div>
+</div>
+<div class="modalBody">
+<p class="modalText" id="redeemRevealText">You unlocked a new card!</p>
+<div class="redeemRevealHero">
+<div class="redeemCardFrame">
+<img alt="Card" id="redeemRevealImg" src=""/>
+<div class="redeemShine"></div>
+</div>
+<div class="redeemRevealInfo">
+<div class="redeemRevealName" id="redeemRevealName">Card Name</div>
+<div class="redeemRevealStats" id="redeemRevealStats">ATK 0 • DEF 0 • HP 0</div>
+<div class="redeemRevealAbility">
+<div class="redeemRevealAbilityName" id="redeemRevealAbilityName">Ability</div>
+<div class="redeemRevealAbilityDesc" id="redeemRevealAbilityDesc">Ability description…</div>
+</div>
+</div>
+</div>
+<div class="redeemCodeLine" id="redeemRevealCodeLine">Code:</div>
+</div>
+<div class="modalActions">
+<button class="btn btnPrimary big" id="btnRedeemRevealClaim">✨ CLAIM</button>
+<button class="btn btnGhost big" id="btnRedeemRevealClose">Close</button>
+</div>
+</div>
+</div>
+<!-- 🎁 REDEEM CODE INPUT MODAL (replaces prompt()) -->
+<div class="modalOverlay" id="redeemCodeModal" style="display:none;">
+<div class="modalBox redeemCodeBox" id="redeemCodeBox">
+<div class="modalHeader">
+<div>
+<div class="modalTitle">🎁 Redeem Code</div>
+<div class="modalPill">Claim rewards</div>
+</div>
+<button aria-label="Close redeem" class="btn btnGhost" id="btnRedeemCancel">✖</button>
+</div>
+<div class="modalBody">
+<p class="modalText">Enter a redeem code to unlock rewards on this device.</p>
+<div class="redeemInputWrap" id="redeemInputWrap">
+<div aria-hidden="true" class="redeemInputGlow"></div>
+<input autocomplete="off" class="redeemCodeInput" id="redeemCodeInput" inputmode="text" maxlength="32" placeholder="TYPE CODE…" spellcheck="false" type="text"/>
+<div class="redeemHintRow">
+<span class="pill">Tip: spaces &amp; hyphens are ignored</span>
+<span class="pill">Press Enter ↵</span>
+</div>
+</div>
+<div class="redeemError" id="redeemCodeError" style="display:none;">—</div>
+</div>
+<div class="modalActions">
+<button class="btn btnPrimary big" id="btnRedeemSubmit">✨ Redeem</button>
+<button class="btn btnGhost big" id="btnRedeemCancel2">Cancel</button>
+</div>
+</div>
+</div>
+<!-- 🌌 COSMO REVELATION UNLOCK MODAL -->
+<div class="modalOverlay" id="cosmoRevealModal" style="display:none;">
+<div class="modalBox cosmoRevealBox">
+<div class="modalHeader">
+<div class="modalTitle">🌌 Cosmo Revelation</div>
+<div class="modalPill">Unlocked</div>
+</div>
+<div class="modalBody">
+<p class="modalText" id="cosmoRevealText">A forbidden page of the cosmos has been revealed…</p>
+<div class="cosmoRevealHero">
+<div class="cosmoCardFrame">
+<img alt="Cosmo card" id="cosmoRevealImg" src=""/>
+<div class="redeemShine"></div>
+</div>
+<div class="cosmoRevealLore" id="cosmoRevealLore">—</div>
+</div>
+</div>
+<div class="modalActions single">
+<button class="btn btnPrimary big" id="btnCosmoGoNow">Go Now</button>
+</div>
+</div>
+</div>
+<!-- 🤫 SECRETS: NON-SHOP CARD UPGRADE MODAL -->
+<div class="modalOverlay" id="secretsModal" style="display:none;">
+<div class="modalBox secretsModalBox">
+<div class="modalHeader">
+<div class="modalTitle">🤫 Secrets</div>
+<div class="modalPill" id="secretsModalPill">Upgrade non-shop cards</div>
+</div>
+<div class="modalBody">
+<div class="secretsList" id="secretsList"></div>
+</div>
+<div class="modalActions single">
+<button class="btn btnGhost big" id="btnSecretsClose">Close</button>
+</div>
+</div>
+</div>
+<!-- ✅ SFX -->
+<audio id="sfxClick" preload="auto" src="sfx/click.mp3"></audio>
+<audio id="sfxAttack" preload="auto" src="sfx/attack.mp3"></audio>
+<audio id="sfxSkill" preload="auto" src="sfx/skill.mp3"></audio>
+<audio id="sfxEnd" preload="auto" src="sfx/endturn.mp3"></audio>
+<audio id="sfxWin" preload="auto" src="sfx/win.mp3"></audio>
+<audio id="sfxLose" preload="auto" src="sfx/lose.mp3"></audio>
+<audio id="sfxBuy" preload="auto" src="sfx/buy.mp3"></audio>
+<audio id="sfxDraw" preload="auto" src="sfx/draw.mp3"></audio>
+<audio id="sfxJackpot" preload="auto" src="sfx/jackpot.mp3"></audio>
+<script src="game.js"></script>
+<div id="statusTooltip" class="statusTooltip" role="tooltip" style="display:none;"></div>
+
+<!-- 🏁 Final Moments SFX -->
+<audio id="finalMomentsSfx" src="sfx/final.mp3" preload="auto" loop></audio>
+
+<script>
+/* ✨ Website FX: mouse-reactive particles + occasional shooting stars */
+(function(){
+  function ready(fn){ if(document.readyState!=="loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
+
+  ready(function(){
+    var wrap = document.querySelector(".siteBg");
+    if(!wrap) return;
+
+    var particles = wrap.querySelector(".siteParticles");
+    var shooting = wrap.querySelector(".siteShooting");
+    if(!particles){
+      particles = document.createElement("div");
+      particles.className="siteParticles";
+      wrap.appendChild(particles);
+    }
+    if(!shooting){
+      shooting = document.createElement("div");
+      shooting.className="siteShooting";
+      wrap.appendChild(shooting);
+    }
+
+    // Respect reduced motion
+    var reduce = false;
+    try { reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){}
+
+    // ---------- Mouse-reactive floating particles ----------
+    // Performance: keep the effect, but lower element count + cheaper updates on mobile/low-power devices.
+    var ua = (navigator && navigator.userAgent) ? navigator.userAgent : "";
+    var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator && "maxTouchPoints" in navigator && navigator.maxTouchPoints > 1);
+    var lowPerf = false;
+    try { lowPerf = document.body.classList.contains("perfLow"); } catch(e){}
+    // Fallback heuristic if body class wasn't applied yet
+    if(!lowPerf){
+      var cores = Number(navigator && navigator.hardwareConcurrency) || 0;
+      var mem = Number(navigator && navigator.deviceMemory) || 0;
+      lowPerf = !!(isMobile && ((cores && cores <= 4) || (mem && mem <= 4)));
+    }
+
+    function inBattle(){ try { return document.body && document.body.classList.contains("inBattle"); } catch(e){ return false; } }
+
+    function setFxVisible(on){
+      try { particles.style.display = on ? "" : "none"; } catch(e){}
+      try { shooting.style.display = on ? "" : "none"; } catch(e){}
+    }
+
+    // If we're inside battle on a low-power device, pause heavy website FX.
+    if (lowPerf && inBattle()){
+      setFxVisible(false);
+      reduce = true; // also stops shooting stars loop
+    }
+
+    // Watch for battle enter/exit (pause/resume FX)
+    try {
+      var obs = new MutationObserver(function(){
+        if(!lowPerf) return;
+        if(inBattle()){
+          setFxVisible(false);
+          reduce = true;
+        } else {
+          setFxVisible(true);
+          // don't force reduce=false if user prefers reduced motion
+          // (stars loop will still be throttled by lowPerf cadence)
+        }
+      });
+      obs.observe(document.body, { attributes:true, attributeFilter:["class"] });
+    } catch(e){}
+
+    var COUNT = lowPerf ? 6 : 14;
+    var ps = [];
+    var w = window.innerWidth, h = window.innerHeight;
+    var mx = w * 0.5, my = h * 0.35;
+    var tx = mx, ty = my;
+
+    function onResize(){
+      w = window.innerWidth; h = window.innerHeight;
+    }
+    window.addEventListener("resize", onResize, {passive:true});
+
+    function rand(a,b){ return a + Math.random()*(b-a); }
+
+    function makeParticle(i){
+      var el = document.createElement("div");
+      el.className = "p";
+      el.style.setProperty("--s", rand(10, 26).toFixed(1) + "px");
+      el.style.setProperty("--o", rand(0.14, 0.38).toFixed(2));
+      el.style.setProperty("--blur", rand(0.0, 1.4).toFixed(1) + "px");
+      el.style.setProperty("--t", rand(10, 22).toFixed(1) + "s");
+      el.style.setProperty("--h", rand(180, 260).toFixed(0)); // bluish-purple hue
+      el.style.left = rand(0, 100).toFixed(2) + "%";
+      el.style.top  = rand(0, 100).toFixed(2) + "%";
+      particles.appendChild(el);
+      return { el: el, x: rand(0,1), y: rand(0,1), vx: rand(-0.0006,0.0006), vy: rand(-0.0005,0.0005), ox: rand(-28,28), oy: rand(-18,18) };
+    }
+
+    if(!reduce){
+      for(var i=0;i<COUNT;i++) ps.push(makeParticle(i));
+    }
+
+    function onMove(e){
+      var p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+      mx = p.clientX; my = p.clientY;
+    }
+    window.addEventListener("mousemove", onMove, {passive:true});
+    window.addEventListener("touchmove", onMove, {passive:true});
+
+    var last = performance.now();
+    var acc = 0;
+    var targetStep = lowPerf ? (1000/30) : (1000/60);
+    var paused = false;
+    document.addEventListener("visibilitychange", function(){
+      paused = !!document.hidden;
+    }, {passive:true});
+
+    function tick(now){
+      var dtRaw = Math.min(48, now - last); last = now;
+      if(paused){ requestAnimationFrame(tick); return; }
+
+      acc += dtRaw;
+      if(lowPerf && acc < targetStep){
+        // keep input smoothing even when throttling visuals
+        tx += (mx - tx) * 0.06;
+        ty += (my - ty) * 0.06;
+        requestAnimationFrame(tick);
+        return;
+      }
+      var dt = acc; acc = 0;
+      // ease target so it feels smooth
+      tx += (mx - tx) * 0.06;
+      ty += (my - ty) * 0.06;
+
+      if(!reduce){
+        // parallax offset based on pointer position (compute once per frame to avoid repeated layout reads)
+        var px = (tx / (w || 1)  - 0.5) * 2;  // -1..1
+        var py = (ty / (h || 1) - 0.5) * 2;
+        for(var i=0;i<ps.length;i++){
+          var p = ps[i];
+          // gentle drift
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          if(p.x < -0.05) p.x = 1.05;
+          if(p.x > 1.05)  p.x = -0.05;
+          if(p.y < -0.05) p.y = 1.05;
+          if(p.y > 1.05)  p.y = -0.05;
+
+          var ox = p.ox + px * 18;
+          var oy = p.oy + py * 12;
+
+          p.el.style.transform = "translate3d(" + ox.toFixed(1) + "px," + oy.toFixed(1) + "px,0)";
+        }
+      }
+
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // ---------- Occasional shooting stars ----------
+    function spawnStar(){
+      if(reduce) return;
+      if(lowPerf && inBattle && inBattle()) return;
+
+      var star = document.createElement("div");
+      star.className = "shootingStar";
+
+      // random start position (top area)
+      var startX = rand(-10, 110);
+      var startY = rand(-10, 35);
+      star.style.left = startX.toFixed(1) + "%";
+      star.style.top  = startY.toFixed(1) + "%";
+
+      // random angle + duration
+      var ang = rand(18, 34);
+      var dur = rand(1.1, 1.9);
+      star.style.setProperty("--a", ang.toFixed(1) + "deg");
+      star.style.setProperty("--d", dur.toFixed(2) + "s");
+
+      shooting.appendChild(star);
+
+      setTimeout(function(){
+        try { star.remove(); } catch(e){}
+      }, (dur*1000 + 600));
+    }
+
+    function loopStars(){
+      if(lowPerf && inBattle && inBattle()){
+        var wait = lowPerf ? rand(4800, 12000) : rand(3200, 9000);
+        setTimeout(loopStars, wait);
+        return;
+      }
+      // spawn 1-2 stars, then wait random time
+      spawnStar();
+      if(Math.random() < 0.35) setTimeout(spawnStar, rand(220, 700));
+      var wait = lowPerf ? rand(3800, 11000) : rand(2600, 8200);
+      setTimeout(loopStars, wait);
+    }
+    setTimeout(loopStars, reduce ? 99999999 : 1400);
+  });
+})();
+</script>
+</body>
+</html>
