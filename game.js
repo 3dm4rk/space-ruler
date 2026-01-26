@@ -277,7 +277,7 @@ function ensureProfileDefaults() {
 function canGainArmor(f) {
   // Time Lock blocks armor gain
   if (f && f.noArmorGain && f.noArmorGain > 0) return false;
-  // 🎲 Roque Dice Roll: while DEF is converted into ATK, block ANY armor gain to prevent spikes.
+  // 🎲 Stakes Taker Dice Roll: while DEF is converted into ATK, block ANY armor gain to prevent spikes.
   if (f && f.diceRollTurns && f.diceRollTurns > 0) return false;
   return true;
 }
@@ -2176,10 +2176,10 @@ eyJiEs: {
   },
 
 
-  // 🎁 Redeem-only: ROQUE
+  // 🎁 Redeem-only: Stakes Taker
   roque: {
     id: "roque",
-    name: "Roque",
+    name: "Stakes Taker",
     img: "cards/roque.png",
     atk: 8,
     def: 26,
@@ -3991,7 +3991,7 @@ function redeemCodeApply(rawInput) {
     "YROL": { type: "card", id: "yrol" },
     "ABARSKIE": { type: "card", id: "abarskie" },
 
-    "ROQUE": { type: "card", id: "roque" },
+    "Stakes Taker": { type: "card", id: "roque" },
 
     
     // 💰 Free Gold
@@ -8279,7 +8279,7 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
     floatingDamage("player", `🔥 +${defender.hp}`, "good");
   }
 
-    // 🎲 Roque passive: Loaded Fate (50% revive, then steal enemy current stats) — 2-turn cooldown
+    // 🎲 Stakes Taker passive: Loaded Fate (50% revive, then steal enemy current stats) — 2-turn cooldown
   if (
     state.phase === "battle" &&
     actualTaken > 0 &&
@@ -8399,7 +8399,7 @@ function tickStatuses(f) {
   if (f.mark > 0) f.mark -= 1;
   if (f.hellBrand > 0) f.hellBrand -= 1;
 
-  // 🎲 Roque: Dice Roll (legacy cleanup)
+  // 🎲 Stakes Taker: Dice Roll (legacy cleanup)
 // Older versions used a temporary DEF->ATK conversion. New behavior is permanent stacking,
 // so if a save file still has these timers, just clear them safely without reverting stats.
   if (f.diceRollTurns > 0 || f._diceRollStoredDef) {
@@ -8407,7 +8407,7 @@ function tickStatuses(f) {
     f._diceRollStoredDef = 0;
   }
 
-  // 🎲 Roque: Loaded Fate revive cooldown
+  // 🎲 Stakes Taker: Loaded Fate revive cooldown
   if (f.roqueReviveCd > 0) f.roqueReviveCd -= 1;
 
   // ✅ Constellation Curse tick (restore ATK when it ends)
@@ -11891,7 +11891,7 @@ const PATCH_NOTES = [
       "Fixed battle soft-lock: Skill now always releases the action lock when it doesn’t end your turn (cooldown / silenced / blocked).",
       "Buttons now disable while an action is processing so taps never feel ‘frozen’.",
       "Battle flow recovery improved: if anything errors, control returns to the player instead of locking the UI.",
-      "Roque Dice Roll reworked: successful rolls permanently add converted DEF to ATK (stackable) and grant +4 DEF (stackable).",
+      "Stakes Taker Dice Roll reworked: successful rolls permanently add converted DEF to ATK (stackable) and grant +4 DEF (stackable).",
     ]
   },
   {
@@ -11900,7 +11900,7 @@ const PATCH_NOTES = [
     highlights: [
       "Battle Flow Cleanup: actions are now locked safely during animations/AI so battles don’t freeze from double taps.",
       "Mobile Performance: smoother battles by batching log rendering + preventing duplicate enemy timers.",
-      "Roque Stabilization: Dice Roll armor no longer spikes during normal attacks (armor gain is blocked while DEF is converted, and DEF restores cleanly)."
+      "Stakes Taker Stabilization: Dice Roll armor no longer spikes during normal attacks (armor gain is blocked while DEF is converted, and DEF restores cleanly)."
     ],
     changes: [
       "Added a global battle action lock to prevent overlapping inputs.",
@@ -11908,7 +11908,7 @@ const PATCH_NOTES = [
       "Battle log rendering is batched per frame to reduce mobile jank."
     ],
     fixes: [
-      "Fixed Roque 'armor suddenly increases' bug after normal attacks when Dice Roll ends.",
+      "Fixed Stakes Taker 'armor suddenly increases' bug after normal attacks when Dice Roll ends.",
       "Fixed rare soft-locks caused by errors or multiple queued turns (auto-recover keeps your buttons usable).",
       "Reduced mobile lag by limiting forced layouts during rapid log spam."
     ],
