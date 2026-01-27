@@ -6873,19 +6873,51 @@ function cloneCard(card) {
 function combatFeedClear(){ /* removed */ }
 function combatFeedAdd(){ /* removed */ }
 
+// =========================
+// 🧾 Battle log (mobile perf)
+// - Avoids layout thrash by batching DOM writes + smart auto-scroll.
+// - Keeps DOM size bounded (lower on perfLow/mobile).
+// =========================
+let __logQueue = [];
+let __logRaf = 0;
+function __flushLogQueue(){
+  __logRaf = 0;
+  const logEl = $("log");
+  if (!logEl || __logQueue.length === 0) { __logQueue = []; return; }
+
+  // Only auto-scroll if the user is already near the bottom.
+  let shouldStick = true;
+  try {
+    const nearBottom = (logEl.scrollTop + logEl.clientHeight) >= (logEl.scrollHeight - 40);
+    shouldStick = !!nearBottom;
+  } catch(e) {}
+
+  const frag = document.createDocumentFragment();
+  for (const item of __logQueue) {
+    const el = document.createElement("p");
+    if (item.cls) el.className = item.cls;
+    el.textContent = item.msg;
+    frag.appendChild(el);
+  }
+  __logQueue = [];
+  logEl.appendChild(frag);
+
+  // ✅ Keep log DOM from growing forever (smaller cap on low-power)
+  const maxRows = isPerfLow() ? 120 : 220;
+  while (logEl.children.length > maxRows) {
+    try { logEl.removeChild(logEl.firstElementChild); } catch(e){ break; }
+  }
+
+  if (shouldStick) {
+    try { logEl.scrollTop = logEl.scrollHeight; } catch(e) {}
+  }
+}
+
 function log(msg, cls = "", meta = null) {
   // Battle log (scrolling history)
-  const logEl = $("log");
-  if (logEl){
-    const el = document.createElement("p");
-    if (cls) el.className = cls;
-    el.textContent = msg;
-    logEl.appendChild(el);
-    // ✅ Performance: keep log DOM from growing forever (lag fix)
-    while (logEl.children.length > 220){
-      try { logEl.removeChild(logEl.firstElementChild); } catch(e){ break; }
-    }
-    logEl.scrollTop = logEl.scrollHeight;
+  __logQueue.push({ msg: String(msg ?? ""), cls: String(cls || "") });
+  if (!__logRaf) {
+    __logRaf = requestAnimationFrame(__flushLogQueue);
   }
   // On-screen combat feed removed.
 }
@@ -9646,7 +9678,6 @@ function renderStatusIcons(f, containerId) {
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
 
-  wrap.innerHTML = "";
   const beginner = isBeginnerMode();
 
   const allActive = getActiveStatusList(f);
@@ -9656,6 +9687,16 @@ function renderStatusIcons(f, containerId) {
     const basics = new Set(["frozen", "stun2Rounds", "stunned", "silenced"]);
     list = allActive.filter(s => basics.has(s.key));
   }
+
+  // ✅ Perf: only re-render when the visible status list actually changed.
+  // Rebuilding buttons every updateUI is expensive on mobile.
+  try {
+    const sig = (beginner ? "B:" : "A:") + list.map(x => `${x.key}:${x.count}`).join("|");
+    if (wrap.dataset.sig === sig) return;
+    wrap.dataset.sig = sig;
+  } catch(e) {}
+
+  wrap.innerHTML = "";
 
   for (const s of list) {
     const btn = document.createElement("button");
@@ -9747,8 +9788,12 @@ function applyArenaBackground() {
   // Prefer profile background if available
   const bid = (state.profile && state.profile.backgroundId) ? state.profile.backgroundId : (state.backgroundId || "nebula");
   const bg = getBackgroundDef(bid);
-  arena.style.setProperty("--arenaBg", `url("${bg.url}")`);
-  arena.dataset.bg = bg.id;
+  // ✅ Perf: avoid resetting styles every updateUI (causes repaints on mobile)
+  const last = arena.dataset.bg || "";
+  if (last !== String(bg.id)) {
+    arena.style.setProperty("--arenaBg", `url("${bg.url}")`);
+    arena.dataset.bg = bg.id;
+  }
 }
 
 function flashArenaOnSkill() {
@@ -9796,7 +9841,9 @@ function _updateUIImmediate() {
 
   // ✅ UI animations: detect DEF/HP drops and animate (clarity for new players)
   try{
-    const prev = window.__uiPrev || (window.__uiPrev = {});
+    // ✅ Perf: skip forced reflow animations on low-power devices (major mobile stutter source)
+    if (!isPerfLow()) {
+      const prev = window.__uiPrev || (window.__uiPrev = {});
     const pShieldNow = Number(p.shield || 0) || 0;
     const eShieldNow = Number(e.shield || 0) || 0;
     const pHpNow = Number(p.hp || 0) || 0;
@@ -9835,8 +9882,9 @@ function _updateUIImmediate() {
       shakeCard("enemyCard");
     }
 
-    prev.pShield = pShieldNow; prev.eShield = eShieldNow;
-    prev.pHp = pHpNow; prev.eHp = eHpNow;
+      prev.pShield = pShieldNow; prev.eShield = eShieldNow;
+      prev.pHp = pHpNow; prev.eHp = eHpNow;
+    }
   }catch(e){}
 
   // ✅ Battle side-panel: always show current Rank + XP (replaces the old "Quick Guide" tips).
@@ -12144,13 +12192,15 @@ if (p && p.id === "leiRality" && typeof canUseLeiRalitySkill === "function" && !
     const b = $("btnSkill");
     if (b) {
       b.classList.remove("skillCast");
-      void b.offsetWidth; // reflow to restart animation
+      // ✅ Perf: avoid forced reflow on low-power devices
+      if (!isPerfLow()) { void b.offsetWidth; }
       b.classList.add("skillCast");
       setTimeout(() => { try { b.classList.remove("skillCast"); } catch (e) {} }, 380);
     }
 
+    // ✅ Perf: keep gameplay feedback, but skip heavier camera shake on low-power devices
     flashArenaOnSkill();
-    screenShakeArena(6, 240);
+    if (!isPerfLow()) screenShakeArena(6, 240);
     playerSkill();
   });
   safeOn("btnEnd", () => { playSfx("sfxClick", 0.35); playerEndTurn(); });
@@ -12160,17 +12210,52 @@ if (p && p.id === "leiRality" && typeof canUseLeiRalitySkill === "function" && !
   // ✅ Battle UI ticker: keeps the Skill button cooldown text/state updating on real-time cooldowns.
   // (Without this, the button can stay in "CD" state until the next action triggers updateUI.)
   if (!window.__battleUiTicker) {
+    // ✅ Perf: don't call the full updateUI every ~450ms on mobile.
+    // Instead, do a tiny button-only refresh (and slower on perfLow).
+    const intervalMs = isPerfLow() ? 900 : 450;
     window.__battleUiTicker = setInterval(() => {
       try {
         if (!state || state.phase !== "battle") return;
         const p = state.player;
         if (!p) return;
-        // Only tick if we are using real-time cooldowns, or if a real-time cooldown just ended.
-        if (p.skillReadyAt && Math.abs(p.skillReadyAt - Date.now()) < 8 * 60 * 1000) {
-          updateUI();
+
+        // Only tick if we are using real-time cooldowns (or just finished one).
+        if (!p.skillReadyAt || Math.abs(p.skillReadyAt - Date.now()) >= 8 * 60 * 1000) return;
+
+        const bs = document.getElementById("btnSkill");
+        if (!bs) return;
+
+        const now = Date.now();
+        const cdTurns = Math.max(0, Number(p.cooldown || 0) || 0);
+        const rtCd = (p.skillReadyAt && p.skillReadyAt > now);
+        const sil = (typeof isSilenced === "function") ? isSilenced(p) : false;
+
+        const playerTurn = (state.turn === "player" && state.phase === "battle");
+        const busy = (typeof isBattleBusy === "function") ? isBattleBusy() : false;
+        const hpGateOk = (p.id !== "leiRality") || (typeof canUseLeiRalitySkill === "function" ? canUseLeiRalitySkill(p) : true);
+        const onCd = rtCd || cdTurns > 0;
+        const ready = playerTurn && !sil && !onCd && hpGateOk;
+
+        // Avoid DOM writes if label didn't change
+        const cdLabel = rtCd ? formatSkillCd(p) : (cdTurns ? `${cdTurns} turn(s)` : "");
+        const nextText = !playerTurn
+          ? "✨ Use Skill"
+          : (!hpGateOk
+            ? "🩸 Needs ≤40% HP"
+            : (sil
+              ? "🔇 Silenced"
+              : (onCd ? `⏳ Skill CD: ${cdLabel}` : "✨ Use Skill")));
+
+        const cacheKey = `${nextText}|${ready}|${busy}|${playerTurn}`;
+        if (bs.dataset.rtSig !== cacheKey) {
+          bs.dataset.rtSig = cacheKey;
+          bs.textContent = nextText;
+          bs.disabled = !playerTurn || busy || !ready;
+          bs.classList.toggle("skillReady", ready);
+          bs.classList.toggle("skillCooldown", playerTurn && (!ready) && (onCd || sil || !hpGateOk));
         }
       } catch (e) {}
-    }, 450);
+    }, intervalMs);
   }
 
 // Ability info (click the "i" icon to also print the description into the battle log)
