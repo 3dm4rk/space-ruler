@@ -667,6 +667,52 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
   box-shadow: var(--shadow);
   padding:14px;
   position:relative;
+
+/* =========================
+   🎯 Arena HUD (Stage/Round/Turn/Enemy info)
+   Centered at the top INSIDE the Arena Card so players don't need to scroll.
+   ========================= */
+.arenaHudTop{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap: 6px;
+  margin: 2px auto 10px;
+  padding: 6px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  max-width: 100%;
+  position: relative;
+  z-index: 3; /* above vignette */
+}
+
+/* Make the pills smaller but still noticeable */
+.arenaHudTop .pill{
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .25px;
+  opacity: .92;
+  white-space: nowrap;
+}
+
+/* On very small screens, tighten it more */
+@media (max-width: 420px){
+  .arenaHudTop{
+    gap: 5px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+  }
+  .arenaHudTop .pill{
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+}
 }
 
 /* 💥 Tiny screen shake (used by Skill cast) */
@@ -5133,36 +5179,44 @@ body.voidFlash3::before{ background: radial-gradient(circle at 50% 35%, rgba(255
    - last stand aura on fighters
    ========================= */
 
-body.finalMoments::before{
+/*
+  IMPORTANT:
+  Players complained this "final" overlay covered the whole screen.
+  Keep the vibe, but constrain the dark+glow overlay ONLY to the two fighter cards.
+*/
+
+body.finalMoments .fighterCard.player::after,
+body.finalMoments .fighterCard.enemy::after{
   content:"";
-  position: fixed;
-  inset: 0;
+  position:absolute;
+  inset:-2px;
   pointer-events:none;
-  z-index: 9998;
+  border-radius: 30px;
+  /* keep overlay effects BELOW the card content */
+  z-index: 1;
   background:
-    radial-gradient(900px 520px at 50% 28%, rgba(255,125,125,.12), transparent 62%),
-    radial-gradient(1200px 720px at 50% 60%, rgba(0,0,0,.72), rgba(0,0,0,.92));
-  opacity: .0;
-  transition: opacity .45s ease;
+    radial-gradient(320px 220px at 50% 25%, rgba(255,255,255,.06), transparent 60%),
+    radial-gradient(480px 320px at 50% 60%, rgba(0,0,0,.62), rgba(0,0,0,.86));
+  opacity: .92;
+  mix-blend-mode: multiply;
 }
 
-body.finalMoments::after{
-  content:"";
-  position: fixed;
-  inset:-20%;
-  pointer-events:none;
-  z-index: 9998;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(255,255,255,.06), transparent 55%),
-    radial-gradient(circle at 70% 65%, rgba(124,92,255,.06), transparent 55%);
-  filter: blur(22px);
-  opacity: 0;
-  transition: opacity .45s ease;
+/* Make sure fighter card contents stay readable above Final Moments overlays */
+body.finalMoments .fighterCard.player > *,
+body.finalMoments .fighterCard.enemy > *{
+  position: relative;
+  z-index: 2;
 }
 
-body.finalMoments::before,
-body.finalMoments::after{
-  opacity: 1;
+/* Tiny ambient shimmer (still only on the cards) */
+body.finalMoments .fighterCard.player::after,
+body.finalMoments .fighterCard.enemy::after{
+  animation: finalCardVignette 1.45s ease-in-out infinite;
+}
+
+@keyframes finalCardVignette{
+  0%,100%{ opacity: .86; }
+  50%{ opacity: .95; }
 }
 
 /* Darken arena card slightly + make it look "serious" */
@@ -5201,6 +5255,7 @@ body.finalMoments .fighterCard.enemy::before{
   inset:-18px;
   pointer-events:none;
   border-radius: 30px;
+  z-index: 0;
   opacity: .85;
   filter: blur(18px);
   mix-blend-mode: screen;

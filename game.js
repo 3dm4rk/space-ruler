@@ -3,7 +3,7 @@
 // =========================
 
 // Bump this whenever you add a new entry to PATCH_NOTES (used for the 🆕 badge).
-const GAME_VERSION = "battle-flow-cleanup-v16";
+const GAME_VERSION = "battle-flow-cleanup-v17-cosmo-cd";
 
 // =========================
 // ⚡ PERFORMANCE MODE (mobile-friendly, keeps features)
@@ -829,6 +829,9 @@ function tryCosmoGodsVision(defender, attacker, dmg, opts) {
   if (!defender || defender.id !== "cosmoSecret") return;
   if (!attacker) return;
 
+  // ⛔ Nerf: 2-turn passive cooldown (turn-based). While on cooldown, passive won't activate.
+  if (defender.cosmoPassiveCd && defender.cosmoPassiveCd > 0) return;
+
   const incoming = Math.max(0, Number(dmg || 0) || 0);
   if (incoming <= 0) return;
 
@@ -852,7 +855,10 @@ function tryCosmoGodsVision(defender, attacker, dmg, opts) {
     _cosmoReflect: true
   });
 
-  log(`🌌 Gods Vision triggers! ${defender.name} reflects ${incoming} damage back to ${attacker.name}.`, "good");
+  // Start cooldown after triggering
+  defender.cosmoPassiveCd = 6;
+
+  log(`🌌 Gods Vision triggers! ${defender.name} reflects ${incoming} damage back to ${attacker.name}. (CD 2 turns)`, "good");
   floatingDamage(defender === state.player ? "player" : "enemy", `↩️ +${incoming}`, "good");
   floatingDamage(attacker === state.player ? "player" : "enemy", `-${incoming}`, "bad");
   updateUI();
@@ -1669,7 +1675,7 @@ eyJiEs: {
   def: 5,
   hp: 12,
   skillName: "Cooldown Surge",
-  skillDesc: "Passive: Every 2 turns, it increases the enemy’s ability cooldown by +2. Basic Attacks deal 5 TRUE damage that ignores armor every time it uses a normal attack. Bonus: Gains +1 armor every time the passive triggers.",
+  skillDesc: "Passive: Every 2 turns, it increases the enemy’s ability cooldown by +2. Basic Attacks deal TRUE damage equal to its CURRENT ATK (current stats damage) every time it uses a normal attack. Bonus: Gains +1 armor every time the passive triggers.",
   skill: (me) => {
     return { ok: false, msg: "Cooldown Surge is passive. (Triggers every 2 turns.)" };
   }
@@ -2425,7 +2431,7 @@ const SHOP_CARDS = [
   name: "Ey-Ji-Es",
   img: "cards/eyjies.png",
   price: 1000,
-  desc: "Damage: TRUE = current DMG • Armor: 5 • Life: 12 • Passive: Every 2 turns, enemy ability cooldown +2; gain +1 Armor on trigger.",
+  desc: "Damage: TRUE = current ATK • Armor: 5 • Life: 12 • Passive: Every 2 turns, enemy ability cooldown +2; gain +1 Armor on trigger.",
   playable: true
 },
 // ✅ Requested: make these buyable (no longer free)
@@ -2771,6 +2777,9 @@ const STREAK_KEY = "cb_win_streak_v2";
 // --- Card Upgrades ---
 const CARD_UPGRADES_KEY = "cb_card_upgrades_v1";
 
+// --- Card Recency (used/newly purchased ordering) ---
+const CARD_RECENCY_KEY = "cb_card_recency_v1";
+
 // --- Missions ---
 const MISSION_KEY = "cb_missions_v1";
 
@@ -2867,6 +2876,8 @@ const state = {
   winStreak: 0,
   bestStreak: 0,
   cardUpgrades: {},
+  // ✅ Card recency: used/purchased cards float to the top in Pick + Gallery
+  cardRecency: {},
   player: null,
   enemy: null,
   // One-time omen popup when Cosmo Secret is defeated
@@ -2876,6 +2887,61 @@ const state = {
   lastAction: "",
   cosmoOmenShown: false
 };
+
+
+// =========================
+// 🕒 CARD RECENCY (Used / Purchased → show first)
+// =========================
+function getCardRecencyTs(cardId){
+  const m = (state && state.cardRecency && typeof state.cardRecency === "object") ? state.cardRecency : {};
+  const t = (m && cardId != null) ? (Number(m[String(cardId)] || 0) || 0) : 0;
+  return Math.max(0, t);
+}
+
+// Touch a card so it floats to the top in Pick/Gallery.
+// Call this when a card is purchased/unlocked or when it's chosen for battle.
+function touchCardRecency(cardId){
+  if (!cardId) return;
+  if (!state.cardRecency || typeof state.cardRecency !== "object") state.cardRecency = {};
+  state.cardRecency[String(cardId)] = Date.now();
+
+  // Keep map from growing forever (soft cap)
+  try{
+    const keys = Object.keys(state.cardRecency);
+    if (keys.length > 250){
+      keys.sort((a,b)=> (Number(state.cardRecency[a]||0) - Number(state.cardRecency[b]||0)));
+      const drop = keys.slice(0, Math.max(0, keys.length - 200));
+      drop.forEach(k=>{ try{ delete state.cardRecency[k]; }catch(e){} });
+    }
+  }catch(e){}
+}
+
+// For Pick screens (no other sort), full sort by recency desc, then name.
+function sortCardsByRecencyDesc(cards){
+  const arr = Array.isArray(cards) ? cards.slice() : [];
+  arr.sort((a,b)=>{
+    const ta = getCardRecencyTs(a && a.id);
+    const tb = getCardRecencyTs(b && b.id);
+    if (tb !== ta) return tb - ta;
+    return String((a && a.name) || "").localeCompare(String((b && b.name) || ""), undefined, {sensitivity:"base"});
+  });
+  return arr;
+}
+
+// For Gallery (user may sort by rarity/name). We *pin* recents on top, then apply the chosen sort to the rest.
+function pinRecentCardsFirst(cards, restSorterFn){
+  const arr = Array.isArray(cards) ? cards.slice() : [];
+  const rec = [];
+  const rest = [];
+  for (const c of arr){
+    if (getCardRecencyTs(c && c.id) > 0) rec.push(c);
+    else rest.push(c);
+  }
+  rec.sort((a,b)=> getCardRecencyTs(b && b.id) - getCardRecencyTs(a && a.id));
+  if (typeof restSorterFn === "function") rest.sort(restSorterFn);
+  return rec.concat(rest);
+}
+
 
 const $ = (id) => document.getElementById(id);
 
@@ -3426,6 +3492,7 @@ function buyUpcomingCard(id) {
   state.gold -= price;
   if (!state.owned) state.owned = {};
   state.owned[id] = true;
+  try { touchCardRecency(id); } catch(e) {}
 
   saveProgress();
   updateGoldUI();
@@ -3636,6 +3703,7 @@ function buyShopCard
 
   state.gold -= item.price;
   state.owned[id] = true;
+  try { touchCardRecency(id); } catch(e) {}
 
   saveProgress();
   updateGoldUI();
@@ -4095,6 +4163,7 @@ function redeemCodeApply(rawInput) {
     }
 
     state.owned[cardId] = true;
+    try { touchCardRecency(cardId); } catch(e) {}
     redeemed[norm] = { type: "card", id: cardId, at: Date.now() };
     storageSet(REDEEMED_CODES_KEY, JSON.stringify(redeemed));
 
@@ -4571,6 +4640,27 @@ function loadProgress() {
     state.cardUpgrades = {};
   }
 
+  // ---- Card Recency ----
+  try {
+    const raw = storageGet(CARD_RECENCY_KEY);
+    const obj = raw ? (JSON.parse(raw) || {}) : {};
+    // migration: allow array of ids => most recent last
+    if (Array.isArray(obj)) {
+      state.cardRecency = {};
+      const now = Date.now();
+      obj.forEach((id, idx)=>{
+        state.cardRecency[String(id)] = now - (obj.length - idx) * 1000;
+      });
+    } else if (obj && typeof obj === "object") {
+      state.cardRecency = obj;
+    } else {
+      state.cardRecency = {};
+    }
+  } catch {
+    state.cardRecency = {};
+  }
+
+
   // ---- Profile / Rank / Cosmetics ----
   try {
     const raw = storageGet(PROFILE_KEY);
@@ -4619,6 +4709,7 @@ function saveProgress() {
   storageSet(LUCKY_HISTORY_KEY, JSON.stringify(state.luckyHistory || []));
   storageSet(STREAK_KEY, JSON.stringify({ winStreak: Number(state.winStreak || 0), bestStreak: Number(state.bestStreak || 0) }));
   storageSet(CARD_UPGRADES_KEY, JSON.stringify(state.cardUpgrades || {}));
+  storageSet(CARD_RECENCY_KEY, JSON.stringify(state.cardRecency || {}));
 storageSet(LUCKY_ENTITY_OWNED_KEY, state.luckyEntityOwned ? "1" : "0");
 
   // Profile
@@ -4642,6 +4733,7 @@ storageSet(LUCKY_ENTITY_OWNED_KEY, state.luckyEntityOwned ? "1" : "0");
 function unlockRayBill() {
   if (!state.owned) state.owned = {};
   state.owned["rayBill"] = true;
+  try { touchCardRecency("rayBill"); } catch(e) {}
   state.rayBillOmenShown = true;
 
   try { saveProgress(); } catch (e) {}
@@ -5475,6 +5567,8 @@ function startDuelGame(playerCardId) {
     return;
   }
 
+  try { touchCardRecency(playerCardId); saveProgress(); } catch(e) {}
+
   state.duelMode = true;
   state.stage = 1;
   state.relics = state.equippedRelicId ? [state.equippedRelicId] : [];
@@ -5689,6 +5783,7 @@ function unlockSecretStreakCard() {
   if (state.owned[SECRET_STREAK_CARD_ID]) return false;
 
   state.owned[SECRET_STREAK_CARD_ID] = true;
+  try { touchCardRecency(SECRET_STREAK_CARD_ID); } catch(e) {}
   saveProgress();
 
   log(`🎁 LIMITED EDITION UNLOCKED: Cosmo Secret`, "good");
@@ -6754,6 +6849,12 @@ function pvpStartMatch({ teamSize, p1CardIds, p2CardIds, pressure, turnSeconds }
 
   const p1Team = buildTeam(p1CardIds);
   const p2Team = buildTeam(p2CardIds);
+
+  try {
+    (p1CardIds||[]).forEach(id=>touchCardRecency(id));
+    (p2CardIds||[]).forEach(id=>touchCardRecency(id));
+    saveProgress();
+  } catch(e) {}
 
   // Fallback so it never crashes
   if (p1Team.length < 1) p1Team.push(cloneCard(pool[0]));
@@ -8125,6 +8226,19 @@ function applyDamage(defender, dmg, opts = {}) {
   defender.shield = Number(defender.shield);
   if (!Number.isFinite(defender.shield)) defender.shield = 0;
 
+
+  // 🎲 Roque safety: snapshot last alive stats so Loaded Fate can revive cleanly
+  // Fixes rare bug where Roque's HP/DEF could desync and appear to "copy" the enemy's HP.
+  if (defender && defender.id === "roque" && Number(defender.hp || 0) > 0) {
+    defender._roqueLastAlive = {
+      atk: Math.max(0, Number(defender.atk || 0) || 0),
+      shield: Math.max(0, Number(defender.shield || 0) || 0),
+      shieldCap: Math.max(0, Number((defender.shieldCap != null ? defender.shieldCap : defender.shield) || 0) || 0),
+      maxHp: Math.max(1, Number(defender.maxHp || defender.hp || 1) || 1)
+    };
+  }
+
+
   const damageType = (opts.damageType || "physical").toLowerCase();
   const source = (opts.source || "attack").toLowerCase();
 
@@ -8389,7 +8503,10 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
     floatingDamage("player", `🔥 +${defender.hp}`, "good");
   }
 
-    // 🎲 Roque passive: Loaded Fate (50% revive, then steal enemy current stats) — 2-turn cooldown
+  // 🎲 Roque passive: Loaded Fate (50% revive, then steal enemy current stats) — 2-turn cooldown
+  // ✅ Fixes:
+  // 1) Prevent Roque HP from appearing to "copy" enemy HP by reviving to FULL HP (its own maxHp) after applying gains.
+  // 2) Ensure revive restores Roque's CURRENT stats from before death (so it respawns "with full stats") then applies steals.
   if (
     state.phase === "battle" &&
     actualTaken > 0 &&
@@ -8401,21 +8518,37 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
     if (Math.random() < 0.5) {
       // Determine the opponent whose stats will be stolen
       const foeUnit = opts.attacker || (defender === state.player ? state.enemy : state.player);
+
       const foeAtk = Math.max(0, Number(foeUnit && foeUnit.atk || 0) || 0);
       const foeDef = Math.max(0, Number((foeUnit && (foeUnit.def ?? foeUnit.shield)) || 0) || 0);
       const foeHp  = Math.max(0, Number(foeUnit && foeUnit.hp || 0) || 0);
 
-      // Revive at 1 HP, then add enemy CURRENT stats
-      defender.hp = 1;
+      // Restore Roque's last alive baseline (so revive comes back with FULL stats)
+      const snap = defender._roqueLastAlive || null;
 
+      const baseAtk = snap ? Math.max(0, Number(snap.atk || 0) || 0) : Math.max(0, Number(defender.atk || 0) || 0);
+      const baseCap = snap ? Math.max(0, Number(snap.shieldCap || 0) || 0) : Math.max(0, Number(defender.shieldCap ?? defender.shield ?? 0) || 0);
+      const baseMax = snap ? Math.max(1, Number(snap.maxHp || 1) || 1) : Math.max(1, Number(defender.maxHp || 1) || 1);
+
+      defender.atk = baseAtk;
+      defender.shieldCap = baseCap;
+      defender.shield = baseCap;
+      defender.def = defender.shield;
+
+      defender.maxHp = baseMax;
+      defender.hp = defender.maxHp;
+
+      // Now apply steals (stack onto current stats)
       defender.atk = Math.max(0, Number(defender.atk || 0) || 0) + foeAtk;
 
-      defender.shield = Math.max(0, Number(defender.shield || 0) || 0) + foeDef;
+      defender.shieldCap = Math.max(0, Number(defender.shieldCap || 0) || 0) + foeDef;
+      defender.shield = Math.min(defender.shieldCap, Math.max(0, Number(defender.shield || 0) || 0) + foeDef);
       defender.def = defender.shield;
-      defender.shieldCap = Math.max(Number(defender.shieldCap || 0) || 0, defender.shield);
 
       defender.maxHp = Math.max(1, Number(defender.maxHp || 1) || 1) + foeHp;
-      defender.hp = Math.min(defender.maxHp, Number(defender.hp || 0) + foeHp);
+
+      // ✅ Respawn at FULL HP (not enemy HP / not 1+enemy HP)
+      defender.hp = defender.maxHp;
 
       defender.roqueReviveCd = 2;
 
@@ -8423,8 +8556,8 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
       try { spawnReviveFx(side, true); } catch (e) {}
       try { cardReviveFlip(side); } catch (e) {}
 
-      log(`🎲 Loaded Fate! ${defender.name} resurrects and steals stats (+${foeAtk} ATK, +${foeDef} DEF, +${foeHp} HP).`, "good");
-      floatingDamage(side, `🎲 +STATS`, "good");
+      log(`🎲 Loaded Fate! ${defender.name} resurrects at full power and steals stats (+${foeAtk} ATK, +${foeDef} DEF, +${foeHp} HP).`, "good");
+      floatingDamage(side, `🎲 REVIVE`, "good");
     }
   }
 
@@ -8499,6 +8632,9 @@ function tickStatuses(f) {
   if (f.noArmorGain > 0) f.noArmorGain -= 1;
   if (f.rebootSeal > 0) f.rebootSeal -= 1;
   if (f.silenced > 0) f.silenced -= 1;
+
+  // 🌌 Cosmo Secret: passive cooldown tick (2-turn cooldown after trigger)
+  if (f.id === "cosmoSecret" && f.cosmoPassiveCd > 0) f.cosmoPassiveCd -= 1;
 
   // ✅ META timers
   if (f.sanctuary > 0) f.sanctuary -= 1;
@@ -9817,6 +9953,7 @@ openModal({
         // (Still hard-gated for use until Mission 9 is complete via isCardUsableByPlayer().)
         if (!state.owned) state.owned = {};
         state.owned.relicbornTitan = true;
+        try { touchCardRecency("relicbornTitan"); } catch(e) {}
         log(`🎁 UNLOCKED: Entity card added to your collection!`, "good");
       }
 
@@ -10083,7 +10220,7 @@ function enemyAI() {
 const isEyjies = e && e.id === "eyJiEs";
 const isHalakaReality = e && e.id === "halaka" && e.halakaForm === "reality";
 
-// Ey-Ji-Es keeps its special: always 5 TRUE on basic attacks.
+// Ey-Ji-Es passive: basic attacks deal TRUE damage equal to its CURRENT ATK (current stats damage).
 // ✅ Halaka Reality Form: basic attacks become TRUE damage equal to Halaka's CURRENT damage.
 const dmg = isEyjies ? dmgCalcNoRng(e) : (isHalakaReality ? dmgCalcNoRng(e) : dmgCalc(e));
 const dmgType = isEyjies ? "true" : (isHalakaReality ? "true" : "physical");
@@ -10136,7 +10273,7 @@ function playerAttack() {
 const isEyjies = p && p.id === "eyJiEs";
 const isHalakaReality = p && p.id === "halaka" && p.halakaForm === "reality";
 
-// Ey-Ji-Es keeps its special: always 5 TRUE on basic attacks.
+// Ey-Ji-Es passive: basic attacks deal TRUE damage equal to its CURRENT ATK (current stats damage).
 // ✅ Halaka Reality Form: basic attacks become TRUE damage equal to Halaka's CURRENT damage.
 const dmg = isEyjies ? dmgCalcNoRng(p) : (isHalakaReality ? dmgCalcNoRng(p) : dmgCalc(p));
 const dmgType = isEyjies ? "true" : (isHalakaReality ? "true" : (zukiTrue ? "true" : "physical"));
@@ -10522,7 +10659,7 @@ function renderPick() {
   // Only show cards that the player is currently allowed to use.
   // This prevents mission-gated/secret cards (e.g., Entity) from leaking into
   // the Battle pick screen before the required mission is completed.
-  const all = (getAllCards() || []).filter((c) => c && isCardUsableByPlayer(c.id));
+  const all = sortCardsByRecencyDesc((getAllCards() || []).filter((c) => c && isCardUsableByPlayer(c.id)));
 
   all.forEach((card) => {
     const div = document.createElement("div");
@@ -10575,15 +10712,22 @@ function renderGallery() {
     return i >= 0 ? i : 0;
   };
 
+
+  // ✅ Recent used / newly purchased cards always float to the top
+  let restSorterFn = null;
   if (sortVal === "rarityDesc") {
-    list.sort((a,b) => (rarityRank(b.id) - rarityRank(a.id)) || String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" }));
+    restSorterFn = (a,b) => (rarityRank(b.id) - rarityRank(a.id)) || String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" });
   } else if (sortVal === "rarityAsc") {
-    list.sort((a,b) => (rarityRank(a.id) - rarityRank(b.id)) || String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" }));
+    restSorterFn = (a,b) => (rarityRank(a.id) - rarityRank(b.id)) || String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" });
   } else if (sortVal === "nameAsc") {
-    list.sort((a,b) => String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" }));
+    restSorterFn = (a,b) => String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity:"base" });
   } else {
-    // default: keep original order
+    // default: keep original order (but still pin recent cards on top)
+    restSorterFn = null;
   }
+
+  list = pinRecentCardsFirst(list, restSorterFn);
+
 
   list.forEach((card) => {
     const div = document.createElement("div");
@@ -11062,6 +11206,7 @@ function applyLuckyReward(reward) {
     renderShopRelics();
   } else if (reward.type === "card") {
     state.owned[reward.id] = true;
+    try { touchCardRecency(reward.id); } catch(e) {}
     saveProgress();
     updateGoldUI();
     renderShopCards();
@@ -11222,6 +11367,9 @@ function startOmniBossFight(optionalPlayerCardId) {
 function startGame(playerCardId) {
   // Leaving duel mode when starting a normal run
   state.duelMode = false;
+
+  // ✅ mark chosen card as 'recently used'
+  try { touchCardRecency(playerCardId); saveProgress(); } catch(e) {}
 
   // If a story boss fight was requested, picking a fighter should start the boss instead of a normal run.
   if (state.pendingBoss === "omni") {
@@ -12077,6 +12225,21 @@ function openTutorial() {
 // Keep the latest note aligned to GAME_VERSION so the "NEW" badge clears correctly.
 // You can add older versions below anytime.
 const PATCH_NOTES = [
+
+
+{
+  version: "battle-flow-cleanup-v17-cosmo-cd",
+  date: "2026-01-28",
+  highlights: [
+    "Cosmo will now have a 6-turn cooldown.",
+    "Ey-Ji-Es now deals true damage based on its current ATK (instead of a flat 5).",
+    "Roque bug fixed: it will no longer change/mimic the enemy’s current HP.",
+    "Card panel UI updated for easier checking.",
+    "Round 30 final effect now only covers the Player Fighter Card and Enemy Fighter Card (not the whole screen).",
+    "Nerf: after Cosmo Secret’s passive triggers, it now has a 2-turn cooldown.",
+    "Newly obtained or recently used cards now display first in the Gallery and when choosing a card for battle."
+  ]
+},
 
 {
   version: "battle-flow-cleanup-v16",
@@ -13490,7 +13653,8 @@ function otherOwner(owner){ return owner==="p1" ? "p2" : "p1"; }
 
   
   function showCharacterSelectModal(teamSize, onDone){
-    const pool = (window.ALL_CARDS || []).slice();
+    let pool = (window.ALL_CARDS || []).slice();
+    try { pool = sortCardsByRecencyDesc(pool); } catch(e) {}
     if (!pool.length){
       window.log("No card pool found — falling back to draft.", "warn");
       return showDraftModal(teamSize, onDone);
