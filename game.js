@@ -5100,16 +5100,31 @@ function applyCosmeticsToBattleUI() {
   const avatarEl = document.getElementById("profileAvatar");
   if (avatarEl) avatarEl.textContent = a.icon;
 
-  // Frame (applies to player's imgFrame)
+  // Frame + Skin (applies to player's imgFrame)
   const pFrame = document.getElementById("pFrame");
   if (pFrame) {
     // safety: ensure this wrapper always behaves like a frame even if HTML was edited
     if (!pFrame.classList.contains("imgFrame")) pFrame.classList.add("imgFrame");
-    // remove any prior frame classes
+
+    // remove prior frame + skin classes
     const allFrameClasses = FRAMES.map(f => f.className).filter(Boolean);
-    allFrameClasses.forEach(cls => pFrame.classList.remove(cls));
+    const allSkinClasses = SKINS.map(s => s.className).filter(Boolean);
+    [...allFrameClasses, ...allSkinClasses].forEach(cls => pFrame.classList.remove(cls));
+
     const f = FRAMES.find(x => x.id === state.frameId) || FRAMES[0];
     if (f.className) pFrame.classList.add(f.className);
+
+    const s = SKINS.find(x => x.id === state.skinId) || SKINS[0];
+    if (s.className) pFrame.classList.add(s.className);
+  }
+
+  // Aura (applies to the player's fighter card container)
+  const playerCard = document.getElementById("playerCard");
+  if (playerCard) {
+    const allAuraClasses = AURAS.map(a => a.className).filter(Boolean);
+    allAuraClasses.forEach(cls => playerCard.classList.remove(cls));
+    const aura = AURAS.find(x => x.id === state.auraId) || AURAS[0];
+    if (aura.className) playerCard.classList.add(aura.className);
   }
 }
 
@@ -5272,9 +5287,11 @@ function renderCosmeticsGrids() {
       const unlocked = isRankAtLeast(a.unlockRank);
       const btn = document.createElement("button");
       btn.className = `cosItem ${unlocked ? "" : "locked"} ${(state.auraId === a.id) ? "selected" : ""}`;
-      const swatch = a.id === "none" ? `<div class="cosFrameSwatch frameDefaultSwatch"></div>` : `<div class="cosFrameSwatch" style="background: rgba(255,255,255,.08);"></div>`;
+      const swatch = a.id === "none"
+        ? `<div class="cosAuraSwatch auraNone"></div>`
+        : `<div class="cosAuraSwatch ${a.className || ""}"></div>`;
       btn.innerHTML = `${swatch}<div class="cosLabel">${a.unlockRank}</div>`;
-      btn.title = unlocked ? `Select: ${a.label}` : `Locked • Rank ${a.unlockRank}`;
+      btn.title = unlocked ? `Select: ${a.label} • ${a.unlockRank}` : `Locked • ${a.unlockRank}`;
       btn.addEventListener("click", () => {
         if (!unlocked) return;
         state.auraId = a.id;
@@ -6184,7 +6201,10 @@ function updateMissionText() {
 
 function showView(view) {
   state.currentView = view;
-  const ids = ["home", "gallery", "story", "setup", "game", "shop", "profile"];
+  
+  // 🚀 Battle perf: toggle body class so background FX can pause during battle
+  try { document.body && document.body.classList.toggle("inBattle", view === "game"); } catch(e) {}
+const ids = ["home", "gallery", "story", "setup", "game", "shop", "profile"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.style.display = id === view ? "block" : "none";
