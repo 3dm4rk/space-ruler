@@ -6590,3 +6590,26 @@ body.skillFlash .arenaCard::before{
     max-height: min(52vh, 420px);
   }
 }
+
+
+/* =========================
+   💡 Defeat Tip (Result Modal)
+   Small + not annoying
+   ========================= */
+.modalTip{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: .92;
+}
+.modalTip::before{
+  content: "💡 Tip: ";
+  font-weight: 900;
+}
+@media (max-width: 520px){
+  .modalTip{ font-size: 11.5px; padding: 9px 11px; }
+}

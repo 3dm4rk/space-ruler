@@ -9201,6 +9201,41 @@ function enemyDecideAction() {
   return { type: "attack" };
 }
 
+
+
+// =========================
+// 💡 DEFEAT TIPS (random, small, not annoying)
+// =========================
+const DEFEAT_TIPS = [
+  "Use your skill with timing—don’t waste it while the enemy still has full armor.",
+  "If your skill has a cooldown, plan around it. Sometimes ‘End Turn’ is better than a weak hit.",
+  "Watch the enemy’s skill tag/cooldown and defend or heal right before their big turn.",
+  "True damage ignores armor. If the enemy deals TRUE damage, stacking DEF won’t save you—heal, stun, or race.",
+  "Armor (DEF) is your first HP bar. Rebuilding shield at the right time can flip a fight.",
+  "Don’t spam potions early. Save them for breakpoints: enemy skill turn or when you drop below ~35% HP.",
+  "If the enemy is low, finishing with a normal attack can be safer than waiting for a cooldown.",
+  "If your skill stuns/silences, use it BEFORE the enemy casts—not after.",
+  "Read the battle log when you lose—most deaths are from one big spike turn you can plan for.",
+  "If your card scales from DEF → ATK or missing HP → DEF, play around those scaling windows.",
+  "If you’re losing trades, chip armor first, then burst HP after shield breaks.",
+  "If the enemy keeps out-damaging you, try a tankier card or a stun card for that stage.",
+  "Cooldown discipline: if your skill is 1 turn away, avoid risky plays that let the enemy kill you first.",
+  "If your passive has a cooldown, don’t assume it will always trigger—play as if it might be offline.",
+  "When you’re behind, prioritize survival (shield/heal) over damage until the enemy’s big skill is spent."
+];
+
+function pickDefeatTip(){
+  const n = DEFEAT_TIPS.length;
+  if (!n) return "";
+  const last = Number(state.lastDefeatTipIndex);
+  let idx = Math.floor(Math.random() * n);
+  if (Number.isFinite(last) && n > 1 && idx === last){
+    idx = (idx + 1 + Math.floor(Math.random() * (n - 1))) % n;
+  }
+  state.lastDefeatTipIndex = idx;
+  return DEFEAT_TIPS[idx];
+}
+
 // =========================
 // MODAL
 // =========================
@@ -9214,6 +9249,19 @@ function openModal({ title, text, stageLabel, hint, goldReward, mode }) {
   setText("resultText", text);
   setText("resultStage", stageLabel);
   setText("modalHint", hint || "");
+
+  // 💡 Defeat tip (random, small)
+  const tipEl = document.getElementById("modalTip");
+  if (tipEl){
+    if (mode === "defeat"){
+      const tip = pickDefeatTip();
+      tipEl.textContent = tip || "";
+      tipEl.style.display = tip ? "block" : "none";
+    } else {
+      tipEl.textContent = "";
+      tipEl.style.display = "none";
+    }
+  }
 
   // NOTE: Some builds remove the old reward/HP/shield fields from the modal.
   // Keep these assignments safe so the modal never crashes.
