@@ -356,30 +356,6 @@ function healUnit(target, amount, opts = {}) {
 }
 
 
-
-// =========================
-// ❤️ Max HP helper (life gain)
-// - Reboot Seal should block ANY HP / MaxHP increase ("anti-heal")
-// - This helper clamps HP to max but does NOT auto-heal (caller decides)
-// =========================
-function gainMaxHp(target, amount, opts = {}) {
-  if (!target) return 0;
-  amount = Number(amount);
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-
-  const allowWhenBlocked = !!opts.allowWhenBlocked; // for rare cases like resurrection designs
-  if (!allowWhenBlocked && !canHeal(target)) return 0;
-
-  const before = Math.max(1, Number(target.maxHp || target.hp || 1) || 1);
-  const after = Math.max(1, before + amount);
-
-  target.maxHp = after;
-  // keep current HP within new max (no auto-heal here)
-  target.hp = Math.min(after, Math.max(0, Number(target.hp || 0) || 0));
-
-  return after - before;
-}
-
 // =========================
 // 🛡️ LeiRality Passive: Defense Specialist helpers
 // =========================
@@ -1164,10 +1140,8 @@ function triggerRelicbornTitanOnKill(attacker, defender, opts) {
   attacker.shieldCap = Math.max(0, Number(attacker.shieldCap || attacker.shield || attacker.def || 0)) + 5;
 
   // Health: increase max HP and heal +5 (capped)
-  if (canHeal(attacker)) {
-    gainMaxHp(attacker, 5);
-    healUnit(attacker, 5, { source: "potion" });
-  }
+  attacker.maxHp = Math.max(1, Number(attacker.maxHp || 1)) + 5;
+  attacker.hp = Math.min(attacker.maxHp, Math.max(0, Number(attacker.hp || 0)) + 5);
 
   // Armor: also grant +5 current armor (shield), respecting cap
   attacker.shield = Math.min(getShieldCap(attacker), Math.max(0, Number(attacker.shield || 0)) + 5);
@@ -1392,7 +1366,7 @@ const BASE_CARDS = [
     if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
 
     // ✅ STACKABLE: increase max HP and shield cap so gains can grow beyond current limits
-    if (canHeal(me)) gainMaxHp(me, 5);
+    me.maxHp = Math.max(1, Number(me.maxHp || 1) || 1) + 5;
     me.shieldCap = Math.max(0, Number(me.shieldCap || me.shield || me.def || 0) || 0) + 5;
 
     // Heal (blocked by Reboot Seal)
@@ -1492,7 +1466,7 @@ const UNLOCKABLE_CARD_DEFS = {
       if (dmg > 0) applyDamage(foe, dmg, { silent: true, source: "skill" });
       const gained = gainShield(me, 2);
       const healBlocked = !canHeal(me);
-      if (!healBlocked) healUnit(me, 3, { source: "skill" });
+      if (!healBlocked) me.hp = Math.min(me.maxHp, me.hp + 3);
       me.cooldown = 3;
       return { ok: true, msg: healBlocked ? `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, healing blocked.` : `${me.name} freezes time! Enemy loses their next turn. Damage: ${dmg}. +${gained} Armor, +3 HP.` };
     }
@@ -1509,7 +1483,7 @@ const UNLOCKABLE_CARD_DEFS = {
     skill: (me, foe) => {
       if (me.cooldown > 0) return { ok: false, msg: `Skill is on cooldown (${me.cooldown} turns).` };
       // ✅ STACKABLE: increase max HP and shield cap so gains can grow beyond current limits
-    if (canHeal(me)) gainMaxHp(me, 5);
+      me.maxHp = Math.max(1, Number(me.maxHp || 1) || 1) + 5;
       me.shieldCap = Math.max(0, Number(me.shieldCap || me.shield || me.def || 0) || 0) + 5;
 
       const healBlocked = !canHeal(me);
@@ -1620,7 +1594,7 @@ const UNLOCKABLE_CARD_DEFS = {
       // If we were already near full and heal had little/no effect, grant permanent max HP
       const nearFull = before >= (max - 2);
       if (nearFull) {
-        if (canHeal(me)) gainMaxHp(me, 2);
+        me.maxHp = max + 2;
         me.hp = Math.min(me.maxHp, Number(me.hp || 0));
       }
 
@@ -1733,10 +1707,8 @@ novaEmpress: {
       // If enemy died, grant crown
       if (Number(foe.hp || 0) <= 0) {
         me.supernovaCrownStacks = Math.max(0, Number(me.supernovaCrownStacks || 0) || 0) + 1;
-        if (canHeal(me)) {
-          gainMaxHp(me, 5);
-          me.hp = Math.min(me.maxHp, Number(me.maxHp) || 0); // heal to full
-        }
+        me.maxHp = Math.max(1, Number(me.maxHp || me.hp || 1)) + 5;
+        me.hp = Math.min(me.maxHp, Number(me.maxHp) || 0); // heal to full
       }
 
       me.cooldown = 4;
@@ -1828,12 +1800,10 @@ astroWitch: {
 
       // +8 HP (STACKABLE): increase max HP and also increase current HP by +8 (capped at new max)
       // This is a direct max-HP growth effect and should remain stackable.
+      me.maxHp = Math.max(1, Number(me.maxHp || 1) || 1) + 8;
       const hpBefore = Math.max(0, Number(me.hp || 0) || 0);
-      let gainedHp = 0;
-      if (canHeal(me)) {
-        gainMaxHp(me, 8);
-        gainedHp = healUnit(me, 8, { source: "skill" });
-      }
+      me.hp = Math.min(me.maxHp, hpBefore + 8);
+      const gainedHp = me.hp - hpBefore;
 
       me.cooldown = 3;
       updateUI();
@@ -1876,10 +1846,8 @@ astroWitch: {
       me.atk = Math.max(0, Number(me.atk || 0) || 0) + bonusAtk;
 
       // +Life/HP (increase max HP and also heal that amount, capped)
-      if (canHeal(me)) {
-        gainMaxHp(me, bonusLife);
-        healUnit(me, bonusLife, { source: "skill" });
-      }
+      me.maxHp = Math.max(1, Number(me.maxHp || 1) || 1) + bonusLife;
+      me.hp = Math.min(me.maxHp, Math.max(0, Number(me.hp || 0) || 0) + bonusLife);
 
       // +Defense/Armor (increase shield cap and current shield, then sync DEF)
       me.shieldCap = Math.max(0, Number(me.shieldCap || me.shield || me.def || 0) || 0) + bonusDef;
@@ -1988,10 +1956,10 @@ eyJiEs: {
 
       // ✅ Stackable heal ABOVE current life by increasing max HP
       const baseMax = Math.max(1, Number(me.maxHp || 1) || 1);
+      me.maxHp = baseMax + roll;
 
       const healBlocked = !canHeal(me);
       if (!healBlocked) {
-        me.maxHp = baseMax + roll;
         me.hp = Math.min(me.maxHp, Math.max(0, Number(me.hp || 0) || 0) + roll);
       } else {
         // Clamp current HP to the new max if healing is blocked
@@ -2200,8 +2168,8 @@ eyJiEs: {
 
       // HP becomes (base + roll) — NOT stackable (overwrites previous roll bonus)
       const healBlocked = !canHeal(me);
+      me.maxHp = (Number(me._rbBaseMaxHp) || 0) + roll;
       if (!healBlocked) {
-        me.maxHp = (Number(me._rbBaseMaxHp) || 0) + roll;
         // convert into life: set to full new max HP
         me.hp = Math.min(me.maxHp, Number(me.maxHp) || 0);
       } else {
@@ -2292,8 +2260,8 @@ eyJiEs: {
 
       // Life becomes (base + roll)
       const healBlocked = !canHeal(me);
+      me.maxHp = (Number(me._amBaseMaxHp) || 0) + roll;
       if (!healBlocked) {
-        me.maxHp = (Number(me._amBaseMaxHp) || 0) + roll;
         me.hp = Math.min(me.maxHp, Number(me.maxHp) || 0);
       } else {
         me.hp = Math.min(me.maxHp, Number(me.hp || 0) || 0);
@@ -2346,8 +2314,8 @@ eyJiEs: {
       }
 
       const healBlocked = !canHeal(me);
+      me.maxHp = (Number(me._awBaseMaxHp) || 0) + roll;
       if (!healBlocked) {
-        me.maxHp = (Number(me._awBaseMaxHp) || 0) + roll;
         me.hp = Math.min(me.maxHp, Number(me.maxHp) || 0);
       } else {
         me.hp = Math.min(me.maxHp, Number(me.hp || 0) || 0);
@@ -2444,10 +2412,8 @@ eyJiEs: {
         me.shieldCap = Math.max(0, Number(me.shieldCap || me.shield || me.def || 0)) + 3;
         gainShield(me, 3);
 
-        if (canHeal(me)) {
-          gainMaxHp(me, 3);
-          healUnit(me, 3, { source: "skill" });
-        }
+        me.maxHp = Math.max(1, Number(me.maxHp || me.hp || 1)) + 3;
+        if (canHeal(me)) me.hp = Math.min(me.maxHp, Number(me.hp || 0) + 3);
 
         me.img = "cards/zukinimato3.png";
       }
@@ -5100,31 +5066,16 @@ function applyCosmeticsToBattleUI() {
   const avatarEl = document.getElementById("profileAvatar");
   if (avatarEl) avatarEl.textContent = a.icon;
 
-  // Frame + Skin (applies to player's imgFrame)
+  // Frame (applies to player's imgFrame)
   const pFrame = document.getElementById("pFrame");
   if (pFrame) {
     // safety: ensure this wrapper always behaves like a frame even if HTML was edited
     if (!pFrame.classList.contains("imgFrame")) pFrame.classList.add("imgFrame");
-
-    // remove prior frame + skin classes
+    // remove any prior frame classes
     const allFrameClasses = FRAMES.map(f => f.className).filter(Boolean);
-    const allSkinClasses = SKINS.map(s => s.className).filter(Boolean);
-    [...allFrameClasses, ...allSkinClasses].forEach(cls => pFrame.classList.remove(cls));
-
+    allFrameClasses.forEach(cls => pFrame.classList.remove(cls));
     const f = FRAMES.find(x => x.id === state.frameId) || FRAMES[0];
     if (f.className) pFrame.classList.add(f.className);
-
-    const s = SKINS.find(x => x.id === state.skinId) || SKINS[0];
-    if (s.className) pFrame.classList.add(s.className);
-  }
-
-  // Aura (applies to the player's fighter card container)
-  const playerCard = document.getElementById("playerCard");
-  if (playerCard) {
-    const allAuraClasses = AURAS.map(a => a.className).filter(Boolean);
-    allAuraClasses.forEach(cls => playerCard.classList.remove(cls));
-    const aura = AURAS.find(x => x.id === state.auraId) || AURAS[0];
-    if (aura.className) playerCard.classList.add(aura.className);
   }
 }
 
@@ -5287,11 +5238,9 @@ function renderCosmeticsGrids() {
       const unlocked = isRankAtLeast(a.unlockRank);
       const btn = document.createElement("button");
       btn.className = `cosItem ${unlocked ? "" : "locked"} ${(state.auraId === a.id) ? "selected" : ""}`;
-      const swatch = a.id === "none"
-        ? `<div class="cosAuraSwatch auraNone"></div>`
-        : `<div class="cosAuraSwatch ${a.className || ""}"></div>`;
+      const swatch = a.id === "none" ? `<div class="cosFrameSwatch frameDefaultSwatch"></div>` : `<div class="cosFrameSwatch" style="background: rgba(255,255,255,.08);"></div>`;
       btn.innerHTML = `${swatch}<div class="cosLabel">${a.unlockRank}</div>`;
-      btn.title = unlocked ? `Select: ${a.label} • ${a.unlockRank}` : `Locked • ${a.unlockRank}`;
+      btn.title = unlocked ? `Select: ${a.label}` : `Locked • Rank ${a.unlockRank}`;
       btn.addEventListener("click", () => {
         if (!unlocked) return;
         state.auraId = a.id;
@@ -6201,10 +6150,7 @@ function updateMissionText() {
 
 function showView(view) {
   state.currentView = view;
-  
-  // 🚀 Battle perf: toggle body class so background FX can pause during battle
-  try { document.body && document.body.classList.toggle("inBattle", view === "game"); } catch(e) {}
-const ids = ["home", "gallery", "story", "setup", "game", "shop", "profile"];
+  const ids = ["home", "gallery", "story", "setup", "game", "shop", "profile"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.style.display = id === view ? "block" : "none";
@@ -6873,51 +6819,19 @@ function cloneCard(card) {
 function combatFeedClear(){ /* removed */ }
 function combatFeedAdd(){ /* removed */ }
 
-// =========================
-// 🧾 Battle log (mobile perf)
-// - Avoids layout thrash by batching DOM writes + smart auto-scroll.
-// - Keeps DOM size bounded (lower on perfLow/mobile).
-// =========================
-let __logQueue = [];
-let __logRaf = 0;
-function __flushLogQueue(){
-  __logRaf = 0;
-  const logEl = $("log");
-  if (!logEl || __logQueue.length === 0) { __logQueue = []; return; }
-
-  // Only auto-scroll if the user is already near the bottom.
-  let shouldStick = true;
-  try {
-    const nearBottom = (logEl.scrollTop + logEl.clientHeight) >= (logEl.scrollHeight - 40);
-    shouldStick = !!nearBottom;
-  } catch(e) {}
-
-  const frag = document.createDocumentFragment();
-  for (const item of __logQueue) {
-    const el = document.createElement("p");
-    if (item.cls) el.className = item.cls;
-    el.textContent = item.msg;
-    frag.appendChild(el);
-  }
-  __logQueue = [];
-  logEl.appendChild(frag);
-
-  // ✅ Keep log DOM from growing forever (smaller cap on low-power)
-  const maxRows = isPerfLow() ? 120 : 220;
-  while (logEl.children.length > maxRows) {
-    try { logEl.removeChild(logEl.firstElementChild); } catch(e){ break; }
-  }
-
-  if (shouldStick) {
-    try { logEl.scrollTop = logEl.scrollHeight; } catch(e) {}
-  }
-}
-
 function log(msg, cls = "", meta = null) {
   // Battle log (scrolling history)
-  __logQueue.push({ msg: String(msg ?? ""), cls: String(cls || "") });
-  if (!__logRaf) {
-    __logRaf = requestAnimationFrame(__flushLogQueue);
+  const logEl = $("log");
+  if (logEl){
+    const el = document.createElement("p");
+    if (cls) el.className = cls;
+    el.textContent = msg;
+    logEl.appendChild(el);
+    // ✅ Performance: keep log DOM from growing forever (lag fix)
+    while (logEl.children.length > 220){
+      try { logEl.removeChild(logEl.firstElementChild); } catch(e){ break; }
+    }
+    logEl.scrollTop = logEl.scrollHeight;
   }
   // On-screen combat feed removed.
 }
@@ -7736,10 +7650,8 @@ function pvpApplyPotionEffectTo(p, e, potion){
     applyDamage(e, dmg, { silent: true, source: "skill", damageType: "true" });
 
     const gain = Math.max(0, Number(dmg || 0) || 0);
-    if (canHeal(p)) {
-      gainMaxHp(p, gain);
-      healUnit(p, gain, { source: "passive" });
-    }
+    p.maxHp = Math.max(1, Number(p.maxHp || 1) || 1) + gain;
+    p.hp = Math.min(p.maxHp, (Number(p.hp || 0) || 0) + gain);
     p.shield = Math.min(getShieldCap(p), (Number(p.shield || 0) || 0) + gain);
     p.def = p.shield;
 
@@ -8881,11 +8793,9 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
       defender.shield = Math.min(defender.shieldCap, Math.max(0, Number(defender.shield || 0) || 0) + foeDef);
       defender.def = defender.shield;
 
-      if (canHeal(defender)) {
-        gainMaxHp(defender, foeHp, { allowWhenBlocked: true });
-      }
+      defender.maxHp = Math.max(1, Number(defender.maxHp || 1) || 1) + foeHp;
 
-      // ✅ Respawn at FULL HP
+      // ✅ Respawn at FULL HP (not enemy HP / not 1+enemy HP)
       defender.hp = defender.maxHp;
 
       defender.roqueReviveCd = 2;
@@ -9253,41 +9163,6 @@ function enemyDecideAction() {
   return { type: "attack" };
 }
 
-
-
-// =========================
-// 💡 DEFEAT TIPS (random, small, not annoying)
-// =========================
-const DEFEAT_TIPS = [
-  "Use your skill with timing—don’t waste it while the enemy still has full armor.",
-  "If your skill has a cooldown, plan around it. Sometimes ‘End Turn’ is better than a weak hit.",
-  "Watch the enemy’s skill tag/cooldown and defend or heal right before their big turn.",
-  "True damage ignores armor. If the enemy deals TRUE damage, stacking DEF won’t save you—heal, stun, or race.",
-  "Armor (DEF) is your first HP bar. Rebuilding shield at the right time can flip a fight.",
-  "Don’t spam potions early. Save them for breakpoints: enemy skill turn or when you drop below ~35% HP.",
-  "If the enemy is low, finishing with a normal attack can be safer than waiting for a cooldown.",
-  "If your skill stuns/silences, use it BEFORE the enemy casts—not after.",
-  "Read the battle log when you lose—most deaths are from one big spike turn you can plan for.",
-  "If your card scales from DEF → ATK or missing HP → DEF, play around those scaling windows.",
-  "If you’re losing trades, chip armor first, then burst HP after shield breaks.",
-  "If the enemy keeps out-damaging you, try a tankier card or a stun card for that stage.",
-  "Cooldown discipline: if your skill is 1 turn away, avoid risky plays that let the enemy kill you first.",
-  "If your passive has a cooldown, don’t assume it will always trigger—play as if it might be offline.",
-  "When you’re behind, prioritize survival (shield/heal) over damage until the enemy’s big skill is spent."
-];
-
-function pickDefeatTip(){
-  const n = DEFEAT_TIPS.length;
-  if (!n) return "";
-  const last = Number(state.lastDefeatTipIndex);
-  let idx = Math.floor(Math.random() * n);
-  if (Number.isFinite(last) && n > 1 && idx === last){
-    idx = (idx + 1 + Math.floor(Math.random() * (n - 1))) % n;
-  }
-  state.lastDefeatTipIndex = idx;
-  return DEFEAT_TIPS[idx];
-}
-
 // =========================
 // MODAL
 // =========================
@@ -9301,19 +9176,6 @@ function openModal({ title, text, stageLabel, hint, goldReward, mode }) {
   setText("resultText", text);
   setText("resultStage", stageLabel);
   setText("modalHint", hint || "");
-
-  // 💡 Defeat tip (random, small)
-  const tipEl = document.getElementById("modalTip");
-  if (tipEl){
-    if (mode === "defeat"){
-      const tip = pickDefeatTip();
-      tipEl.textContent = tip || "";
-      tipEl.style.display = tip ? "block" : "none";
-    } else {
-      tipEl.textContent = "";
-      tipEl.style.display = "none";
-    }
-  }
 
   // NOTE: Some builds remove the old reward/HP/shield fields from the modal.
   // Keep these assignments safe so the modal never crashes.
@@ -9534,10 +9396,8 @@ function spawnNextEnemy() {
   if (state.player && hasRelic("goldenHeart")) {
     const curMax = Math.max(1, Number(state.player.maxHp || 1));
     const inc = Math.max(1, Math.ceil(curMax * 0.10));
-    if (canHeal(state.player)) {
-      gainMaxHp(state.player, inc);
-      healUnit(state.player, inc, { source: "relic" });
-    }
+    state.player.maxHp = curMax + inc;
+    state.player.hp = Math.min(state.player.maxHp, Number(state.player.hp || 0) + inc);
     log(`💛 Golden Heart empowers you at stage start: +${inc} Max HP.`, "good");
     floatingDamage("player", `+${inc} MaxHP`, "good");
   }
@@ -9678,6 +9538,7 @@ function renderStatusIcons(f, containerId) {
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
 
+  wrap.innerHTML = "";
   const beginner = isBeginnerMode();
 
   const allActive = getActiveStatusList(f);
@@ -9687,16 +9548,6 @@ function renderStatusIcons(f, containerId) {
     const basics = new Set(["frozen", "stun2Rounds", "stunned", "silenced"]);
     list = allActive.filter(s => basics.has(s.key));
   }
-
-  // ✅ Perf: only re-render when the visible status list actually changed.
-  // Rebuilding buttons every updateUI is expensive on mobile.
-  try {
-    const sig = (beginner ? "B:" : "A:") + list.map(x => `${x.key}:${x.count}`).join("|");
-    if (wrap.dataset.sig === sig) return;
-    wrap.dataset.sig = sig;
-  } catch(e) {}
-
-  wrap.innerHTML = "";
 
   for (const s of list) {
     const btn = document.createElement("button");
@@ -9788,12 +9639,8 @@ function applyArenaBackground() {
   // Prefer profile background if available
   const bid = (state.profile && state.profile.backgroundId) ? state.profile.backgroundId : (state.backgroundId || "nebula");
   const bg = getBackgroundDef(bid);
-  // ✅ Perf: avoid resetting styles every updateUI (causes repaints on mobile)
-  const last = arena.dataset.bg || "";
-  if (last !== String(bg.id)) {
-    arena.style.setProperty("--arenaBg", `url("${bg.url}")`);
-    arena.dataset.bg = bg.id;
-  }
+  arena.style.setProperty("--arenaBg", `url("${bg.url}")`);
+  arena.dataset.bg = bg.id;
 }
 
 function flashArenaOnSkill() {
@@ -9841,9 +9688,7 @@ function _updateUIImmediate() {
 
   // ✅ UI animations: detect DEF/HP drops and animate (clarity for new players)
   try{
-    // ✅ Perf: skip forced reflow animations on low-power devices (major mobile stutter source)
-    if (!isPerfLow()) {
-      const prev = window.__uiPrev || (window.__uiPrev = {});
+    const prev = window.__uiPrev || (window.__uiPrev = {});
     const pShieldNow = Number(p.shield || 0) || 0;
     const eShieldNow = Number(e.shield || 0) || 0;
     const pHpNow = Number(p.hp || 0) || 0;
@@ -9882,9 +9727,8 @@ function _updateUIImmediate() {
       shakeCard("enemyCard");
     }
 
-      prev.pShield = pShieldNow; prev.eShield = eShieldNow;
-      prev.pHp = pHpNow; prev.eHp = eHpNow;
-    }
+    prev.pShield = pShieldNow; prev.eShield = eShieldNow;
+    prev.pHp = pHpNow; prev.eHp = eHpNow;
   }catch(e){}
 
   // ✅ Battle side-panel: always show current Rank + XP (replaces the old "Quick Guide" tips).
@@ -10491,7 +10335,7 @@ if (state.turn === "player") tickStatuses(state.player);
       const isReality = cur.halakaForm === "reality";
       if (isReality) {
         // +1 Health (stackable): increase maxHp then heal 1
-        if (canHeal(cur)) gainMaxHp(cur, 1);
+        cur.maxHp = Math.max(1, Number(cur.maxHp || cur.hp || 1) || 1) + 1;
         const healed = healUnit(cur, 1, { source: "passive" });
 
         // +1 Defense (stackable): raise shield cap then gain 1 armor
@@ -10696,9 +10540,9 @@ applyDamage(e, dmg, { source: "attack", damageType: dmgType, attacker: p, attack
     // ✅ Zukinimato Form 6: growth per attack (+5 DEF/+5 HP)
     if (zukiTrue && p.zukiGrowthOnAttack) {
       gainShield(p, 5);
+      p.maxHp = Number(p.maxHp || p.hp || 0) + 5;
       if (canHeal(p)) {
-        gainMaxHp(p, 5);
-        healUnit(p, 5, { source: "passive" });
+        p.hp = Math.min(p.maxHp, Number(p.hp || 0) + 5);
       }
       updateUI();
       log(`🛡️ ${p.name} gains +5 DEF and +5 HEALTH from attacking!`, "good");
@@ -10858,10 +10702,9 @@ function applyPotionEffect(potion) {
 
     // Convert damage into HP + Defense + Max HP for player
     const gain = Math.max(0, Number(dmg || 0) || 0);
-    if (canHeal(p)) {
-      gainMaxHp(p, gain);
-      healUnit(p, gain, { source: "passive" });
-    }
+
+    p.maxHp = Math.max(1, Number(p.maxHp || 1) || 1) + gain;
+    p.hp = Math.min(p.maxHp, (Number(p.hp || 0) || 0) + gain);
 
     // Defense uses shield/def fields
     p.shield = Math.min(getShieldCap(p), (Number(p.shield || 0) || 0) + gain);
@@ -12192,15 +12035,13 @@ if (p && p.id === "leiRality" && typeof canUseLeiRalitySkill === "function" && !
     const b = $("btnSkill");
     if (b) {
       b.classList.remove("skillCast");
-      // ✅ Perf: avoid forced reflow on low-power devices
-      if (!isPerfLow()) { void b.offsetWidth; }
+      void b.offsetWidth; // reflow to restart animation
       b.classList.add("skillCast");
       setTimeout(() => { try { b.classList.remove("skillCast"); } catch (e) {} }, 380);
     }
 
-    // ✅ Perf: keep gameplay feedback, but skip heavier camera shake on low-power devices
     flashArenaOnSkill();
-    if (!isPerfLow()) screenShakeArena(6, 240);
+    screenShakeArena(6, 240);
     playerSkill();
   });
   safeOn("btnEnd", () => { playSfx("sfxClick", 0.35); playerEndTurn(); });
@@ -12210,52 +12051,17 @@ if (p && p.id === "leiRality" && typeof canUseLeiRalitySkill === "function" && !
   // ✅ Battle UI ticker: keeps the Skill button cooldown text/state updating on real-time cooldowns.
   // (Without this, the button can stay in "CD" state until the next action triggers updateUI.)
   if (!window.__battleUiTicker) {
-    // ✅ Perf: don't call the full updateUI every ~450ms on mobile.
-    // Instead, do a tiny button-only refresh (and slower on perfLow).
-    const intervalMs = isPerfLow() ? 900 : 450;
     window.__battleUiTicker = setInterval(() => {
       try {
         if (!state || state.phase !== "battle") return;
         const p = state.player;
         if (!p) return;
-
-        // Only tick if we are using real-time cooldowns (or just finished one).
-        if (!p.skillReadyAt || Math.abs(p.skillReadyAt - Date.now()) >= 8 * 60 * 1000) return;
-
-        const bs = document.getElementById("btnSkill");
-        if (!bs) return;
-
-        const now = Date.now();
-        const cdTurns = Math.max(0, Number(p.cooldown || 0) || 0);
-        const rtCd = (p.skillReadyAt && p.skillReadyAt > now);
-        const sil = (typeof isSilenced === "function") ? isSilenced(p) : false;
-
-        const playerTurn = (state.turn === "player" && state.phase === "battle");
-        const busy = (typeof isBattleBusy === "function") ? isBattleBusy() : false;
-        const hpGateOk = (p.id !== "leiRality") || (typeof canUseLeiRalitySkill === "function" ? canUseLeiRalitySkill(p) : true);
-        const onCd = rtCd || cdTurns > 0;
-        const ready = playerTurn && !sil && !onCd && hpGateOk;
-
-        // Avoid DOM writes if label didn't change
-        const cdLabel = rtCd ? formatSkillCd(p) : (cdTurns ? `${cdTurns} turn(s)` : "");
-        const nextText = !playerTurn
-          ? "✨ Use Skill"
-          : (!hpGateOk
-            ? "🩸 Needs ≤40% HP"
-            : (sil
-              ? "🔇 Silenced"
-              : (onCd ? `⏳ Skill CD: ${cdLabel}` : "✨ Use Skill")));
-
-        const cacheKey = `${nextText}|${ready}|${busy}|${playerTurn}`;
-        if (bs.dataset.rtSig !== cacheKey) {
-          bs.dataset.rtSig = cacheKey;
-          bs.textContent = nextText;
-          bs.disabled = !playerTurn || busy || !ready;
-          bs.classList.toggle("skillReady", ready);
-          bs.classList.toggle("skillCooldown", playerTurn && (!ready) && (onCd || sil || !hpGateOk));
+        // Only tick if we are using real-time cooldowns, or if a real-time cooldown just ended.
+        if (p.skillReadyAt && Math.abs(p.skillReadyAt - Date.now()) < 8 * 60 * 1000) {
+          updateUI();
         }
       } catch (e) {}
-    }, intervalMs);
+    }, 450);
   }
 
 // Ability info (click the "i" icon to also print the description into the battle log)
