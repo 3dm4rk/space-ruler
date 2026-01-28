@@ -321,6 +321,7 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
 .galleryImgWrap{ position:relative; display:block; }
 .galleryImgWrap img{ display:block; width:100%; border-radius: 14px; }
 .passiveTooltip{
+  white-space: pre-line;
   position:absolute;
   left:10px;
   right:10px;

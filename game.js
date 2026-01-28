@@ -1019,11 +1019,21 @@ function getPassiveHoverLines(unit) {
       lines.push("Each time LeiRality defeats an enemy, remaining HP is doubled.");
     } else if (id === "roque") {
       lines.push("Upon death, has a chance to resurrect (revive). When revived, it gains stats from the enemy (battle-only).");
+    } else if (id === "daysi") {
+      lines.push("Every turn, there is a 50% chance to trigger a Dodge effect, allowing Daysi to evade any incoming attack.");
+    } else if (id === "spacePatron") {
+      lines.push("Every 2 turns, Space Patrol deals TRUE damage equal to half of its current ATK (ATK ÷ 2), which penetrates armor, and gains +1 DEF and +1 Health.");
+    } else if (id === "luckyCat") {
+      lines.push("Every turn, there is a 50% chance to gain 20% of the enemy’s ATK, added to Lucky Cat’s current ATK.");
+    } else if (id === "patrickDestroyer") {
+      lines.push("Whenever Patrick kills an enemy using an attack or ability, his ability cooldown is fully reset, and he gains +1 DEF and +1 Health.");
+    } else if (id === "angelo") {
+      lines.push("After each attack or ability use, there is a 50% chance to: Heal 1 HP, remove one debuff from Angelo, and reduce ability cooldown by 1.");
     } else if (id === "baltrio") {
       lines.push("Every 3 turns, reflects ALL damage Baltrio has taken back to the enemy as TRUE damage (ignores armor).");
       lines.push("A 🪞 READY status icon appears when the reflection is charged.");
     } else if (id === "spaceSkeletonPirate") {
-      lines.push("After each attack or skill, has a 50% chance to steal enemy ATK equal to half of its current ATK (ATK ÷ 2), adding it to itself and reducing the enemy by the same amount.");
+      lines.push("After each attack or ability use, has a 50% chance to steal enemy ATK equal to half of the enemy’s current ATK (ATK ÷ 2). The stolen ATK is added to Space Skeleton Pirate’s ATK, and the enemy’s ATK is reduced by the same amount.");
       lines.push("A 🏴‍☠️ status icon appears when the plunder triggers.");
     } else if (id === "yrol") {
       const cdMin = 5;
