@@ -698,7 +698,129 @@ function applyLuckyCatAfterActionPassive(unit, foe) {
   } catch (e) {}
 }
 
+// 🏴‍☠️ Space Skeleton Pirate Passive — Bone Plunder (after action)
+// Triggers AFTER Space Skeleton Pirate performs an action (basic attack OR skill).
+// 50% chance to steal the enemy's ATK by an amount based on HALF of Pirate's CURRENT ATK (Pirate ATK ÷ 2).
+// The stolen ATK is added to Pirate's ATK, and removed from the enemy by the same amount.
+// Adds a clear status icon + pulse so players can tell it procced without reading logs.
+function applySpaceSkeletonPirateAfterActionPassive(unit, foe) {
+  try {
+    if (!unit || !foe) return;
+    if (String(unit.id || "") !== "spaceSkeletonPirate") return;
+    if (Number(unit.hp || 0) <= 0) return;
+    if (Number(foe.hp || 0) <= 0) return;
+
+    // 50% chance after each action (attack/skill)
+    if (Math.random() < 0.5) {
+      const pirateAtk = Math.max(0, Number(unit.atk || 0) || 0);
+      let steal = Math.floor(pirateAtk / 2);
+
+      // Respect Endless War Fatigue (passives weaken late-game)
+      steal = applyFatigueMultiplier(steal, "passive");
+
+      if (steal < 1) steal = 1;
+
+      const foeAtk = Math.max(0, Number(foe.atk || 0) || 0);
+      const actual = Math.min(foeAtk, steal);
+      if (actual <= 0) return;
+
+      unit.atk = (Number(unit.atk || 0) || 0) + actual;
+      foe.atk = Math.max(0, (Number(foe.atk || 0) || 0) - actual);
+
+      // Status icon (shows for 1 turn)
+      unit.spaceSkeletonPirateProc = 1;
+
+      const unitSide = (unit === state.player) ? "player" : "enemy";
+      const foeSide  = (foe === state.player) ? "player" : "enemy";
+      const tone = (unit === state.player) ? "good" : "bad";
+
+      try { floatingDamage(unitSide, `💀 +${actual} ATK`, tone); } catch(e) {}
+      try { floatingDamage(foeSide,  `⚔️ -${actual}`, "warn"); } catch(e) {}
+      try { skeletonPirateProcFx(unitSide, foeSide); } catch(e) {}
+
+      log(`🏴‍☠️ ${unit.name}'s passive triggers! Stole ${actual} ATK from ${foe.name}.`, tone);
+      updateUI();
+    }
+  } catch (e) {}
+}
+
+
 // Quick visual pulse on the fighter frame
+
+
+// =========================
+// ✨ Angelo Passive: Holy Reset (after action)
+// =========================
+// Triggers AFTER Angelo performs an action (basic attack OR skill).
+// 50% chance to:
+// - Heal +1 HP (cannot exceed max HP)
+// - Remove/cleanse any negative status (debuffs)
+// - Reduce skill cooldown by 1 (min 0)
+// Adds a clear status icon + glow pulse so players can see it procced without reading logs.
+function applyAngeloAfterActionPassive(unit) {
+  try {
+    if (!unit) return;
+    if (String(unit.id || "") !== "angelo") return;
+    if (Number(unit.hp || 0) <= 0) return;
+
+    // 50% chance after each action (attack/skill)
+    if (Math.random() < 0.5) {
+      const side = (unit === state.player) ? "player" : "enemy";
+      const tone = (unit === state.player) ? "good" : "bad";
+
+      // ---- Cleanse debuffs (anything negative on status) ----
+      // Note: if you add more debuff keys later, add them here too.
+      // Constellation Curse: restore ATK debuff if present before clearing.
+      if (unit.constellationCurse && unit.constellationCurse > 0 && unit.constellationCurseAtkDown) {
+        unit.atk = Math.max(0, Number(unit.atk || 0) + Number(unit.constellationCurseAtkDown || 0));
+      }
+      unit.constellationCurse = 0;
+      unit.constellationCurseAtkDown = 0;
+
+      unit.frozen = 0;
+      unit.stun2Rounds = 0;
+      unit.stunned = 0;
+      unit.silenced = 0;
+
+      unit.poisonRounds = 0;
+      unit.poisonPct = 0;
+      unit.poisonFlat = 0;
+
+      unit.debuffRounds = 0;
+      unit.noArmorGain = 0;
+      unit.rebootSeal = 0;
+      unit.hellBrand = 0;
+      unit.voidAnchor = 0;
+      unit.mark = 0;
+
+      // ---- Reduce cooldown by 1 ----
+      unit.cooldown = Math.max(0, Number(unit.cooldown || 0) - 1);
+
+      // ---- Heal +1 HP ----
+      const maxHp = Math.max(1, Number(unit.maxHp || unit.hp || 1) || 1);
+      unit.hp = Math.min(maxHp, Math.max(0, Number(unit.hp || 0) + 1));
+
+      // Status icon (shows "PROC" for 1 turn)
+      unit.angeloProc = 1;
+
+      // Visual feedback (no need to read logs)
+      try { floatingDamage(side, `✨ +1 HP`, tone); } catch(e) {}
+      try { angeloProcFx(side); } catch(e) {}
+
+      // Optional log (still useful, but not required to understand)
+      log(`✨ ${unit.name}'s passive triggers! +1 HP, cleansed debuffs, and -1 Skill CD.`, tone);
+    }
+  } catch (e) {}
+}
+
+function angeloProcFx(side) {
+  const id = (side === "enemy") ? "eFrame" : "pFrame";
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add("angeloProcFx");
+  setTimeout(() => { try { el.classList.remove("angeloProcFx"); } catch(e) {} }, 700);
+}
+
 function luckyCatProcFx(side) {
   const id = (side === "enemy") ? "eFrame" : "pFrame";
   const el = document.getElementById(id);
@@ -706,6 +828,22 @@ function luckyCatProcFx(side) {
   el.classList.add("luckyCatProcFx");
   setTimeout(() => { try { el.classList.remove("luckyCatProcFx"); } catch(e) {} }, 650);
 }
+
+function skeletonPirateProcFx(attackerSide, victimSide) {
+  const aId = (attackerSide === "enemy") ? "eFrame" : "pFrame";
+  const vId = (victimSide === "enemy") ? "eFrame" : "pFrame";
+  const a = document.getElementById(aId);
+  const v = document.getElementById(vId);
+  if (a) {
+    a.classList.add("skeletonPirateProcFx");
+    setTimeout(() => { try { a.classList.remove("skeletonPirateProcFx"); } catch(e) {} }, 700);
+  }
+  if (v) {
+    v.classList.add("skeletonPirateVictimFx");
+    setTimeout(() => { try { v.classList.remove("skeletonPirateVictimFx"); } catch(e) {} }, 700);
+  }
+}
+
 
 
 
@@ -881,6 +1019,12 @@ function getPassiveHoverLines(unit) {
       lines.push("Each time LeiRality defeats an enemy, remaining HP is doubled.");
     } else if (id === "roque") {
       lines.push("Upon death, has a chance to resurrect (revive). When revived, it gains stats from the enemy (battle-only).");
+    } else if (id === "baltrio") {
+      lines.push("Every 3 turns, reflects ALL damage Baltrio has taken back to the enemy as TRUE damage (ignores armor).");
+      lines.push("A 🪞 READY status icon appears when the reflection is charged.");
+    } else if (id === "spaceSkeletonPirate") {
+      lines.push("After each attack or skill, has a 50% chance to steal enemy ATK equal to half of its current ATK (ATK ÷ 2), adding it to itself and reducing the enemy by the same amount.");
+      lines.push("A 🏴‍☠️ status icon appears when the plunder triggers.");
     } else if (id === "yrol") {
       const cdMin = 5;
       const now = Date.now();
@@ -901,6 +1045,87 @@ function getPassiveHoverLines(unit) {
 let __skillTipEl = null;
 let __skillTipPinned = false;
 let __skillTipHideT = null;
+
+// =========================
+// 🪟 Lightweight Info Modals (used for Gallery tap + Skill long-press)
+// =========================
+function openInfoModal({ title, pill = "INFO", bodyHtml = "" }) {
+  const overlay = document.createElement("div");
+  overlay.className = "modalOverlay";
+  overlay.style.zIndex = 10020;
+
+  overlay.innerHTML = `
+    <div class="modalBox cardInfoModal">
+      <div class="modalHeader">
+        <div>
+          <div class="modalTitle">${escapeHtml(String(title || "Info"))}</div>
+          <div class="modalPill">${escapeHtml(String(pill || "INFO"))}</div>
+        </div>
+        <button class="btn btnGhost" aria-label="close" type="button">✖</button>
+      </div>
+      <div class="modalBody">${bodyHtml}</div>
+      <div class="modalActions single">
+        <button class="btn btnPrimary big" type="button">OK</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => { try { overlay.remove(); } catch (e) {} };
+
+  const btnClose = overlay.querySelector(".modalHeader .btn.btnGhost");
+  const btnOk = overlay.querySelector(".modalActions .btn");
+  if (btnClose) btnClose.addEventListener("click", close);
+  if (btnOk) btnOk.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  return { close, overlay };
+}
+
+function isTouchLike() {
+  try {
+    if (window.matchMedia && window.matchMedia("(hover: none)").matches) return true;
+  } catch (e) {}
+  try { return (navigator && navigator.maxTouchPoints && navigator.maxTouchPoints > 0); } catch (e) { return false; }
+}
+
+function getGalleryPassiveLines(card) {
+  try {
+    const fake = { id: card?.id, base: card };
+    const lines = getPassiveHoverLines(fake);
+    return Array.isArray(lines) ? lines.filter(Boolean) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function openGalleryCardModal(card, st) {
+  if (!card) return;
+  const skillName = String(card.skillName || "Ability");
+  const skillDesc = String(card.skillDesc || "—");
+  const passiveLines = getGalleryPassiveLines(card);
+
+  const passiveHtml = passiveLines.length
+    ? `<div class="cardInfoPassive"><div class="cardInfoPassiveTitle">Passive</div><div class="cardInfoPassiveText">${escapeHtml(passiveLines.join("\n"))}</div></div>`
+    : `<div class="cardInfoPassive"><div class="cardInfoPassiveTitle">Passive</div><div class="cardInfoPassiveText">None</div></div>`;
+
+  const body = `
+    <div class="cardInfoHero">
+      <img class="cardInfoImg" alt="${escapeHtml(card.name)}" src="${escapeHtml(card.img)}" />
+      <div class="cardInfoMeta">
+        <div class="pill">Damage ${escapeHtml(st?.atk ?? card.atk)} • Armor ${escapeHtml(st?.def ?? card.def)} • Life ${escapeHtml(st?.hp ?? card.hp)}</div>
+      </div>
+    </div>
+    <div class="cardInfoAbility">
+      <div class="cardInfoAbilityTitle">${escapeHtml(skillName)}</div>
+      <div class="cardInfoAbilityText">${escapeHtml(skillDesc)}</div>
+    </div>
+    ${passiveHtml}
+  `;
+
+  openInfoModal({ title: card.name, pill: "GALLERY", bodyHtml: body });
+}
 
 function ensureSkillTooltipEl() {
   if (__skillTipEl) return __skillTipEl;
@@ -1007,9 +1232,35 @@ function attachSkillTooltip(btn, unitGetter, cdTipGetter) {
     moved = false;
     clearPress();
     pressT = setTimeout(() => {
+      if (moved) return;
       const u = getUnit(); if (!u) return;
       try { if (navigator.vibrate) navigator.vibrate(12); } catch(e){}
-      showSkillTooltip(btn, u, getCdTip(), true);
+
+      // ✅ Mobile UX: use a clean modal with an OK button (no tiny tooltip hunting)
+      try { hideSkillTooltip(true); } catch(e) {}
+      try {
+        const cd = String(getCdTip() || "");
+        const skillName = (u?.base?.skillName || "Ability");
+        const skillDesc = (u?.base?.skillDesc || "—");
+        const passiveLines = getPassiveHoverLines(u);
+
+        const passiveHtml = (passiveLines && passiveLines.length)
+          ? `<div class="cardInfoPassive"><div class="cardInfoPassiveTitle">Passive</div><div class="cardInfoPassiveText">${escapeHtml(passiveLines.join("\n"))}</div></div>`
+          : `<div class="cardInfoPassive"><div class="cardInfoPassiveTitle">Passive</div><div class="cardInfoPassiveText">None</div></div>`;
+
+        const body = `
+          <div class="cardInfoAbility">
+            <div class="cardInfoAbilityTitle">${escapeHtml(skillName)}</div>
+            <div class="cardInfoAbilityText">${escapeHtml(skillDesc)}</div>
+            ${cd ? `<div class="cardInfoCd pill">${escapeHtml(cd)}</div>` : ``}
+          </div>
+          ${passiveHtml}
+        `;
+        openInfoModal({ title: `${u?.name || "Card"} — Ability Info`, pill: "BATTLE", bodyHtml: body });
+      } catch (e) {
+        // Fallback to tooltip if anything goes wrong
+        showSkillTooltip(btn, u, getCdTip(), true);
+      }
     }, 420);
   }, { passive: true });
 
@@ -1022,10 +1273,8 @@ function attachSkillTooltip(btn, unitGetter, cdTipGetter) {
     if (__skillTipPinned) { ev.preventDefault(); hideSkillTooltip(true); }
   });
 
-  // Tap to dismiss if pinned
-  btn.addEventListener("click", () => {
-    if (__skillTipPinned) hideSkillTooltip(true);
-  });
+  // If a tooltip is pinned for any reason, a tap will dismiss it.
+  btn.addEventListener("click", () => { if (__skillTipPinned) hideSkillTooltip(true); });
 }
 
 function initSkillTooltipSystem() {
@@ -8729,6 +8978,12 @@ if (fatigueAppliesToSource(source) && dmg > 0) {
   // How much damage actually landed this hit (armor + HP)
   const actualTaken = Math.max(0, Number(absorbed || 0) + Number(hpLoss || 0));
 
+  // 🪞 Baltrio passive tracker: store ALL damage taken (Armor absorbed + HP loss).
+  // This is used later to reflect the stored amount as TRUE damage every 3 turns.
+  if (defender && defender.id === "baltrio" && actualTaken > 0 && !opts._baltrioReflect) {
+    defender.baltrioStored = Number(defender.baltrioStored || 0) + Number(actualTaken || 0);
+  }
+
   // ✅ NEW: Counter Stance (Void Samurai)
   if (defender.counterStance && defender.counterStance > 0) {
     // If enemy used a skill against Samurai, Samurai gains +2 armor
@@ -8991,7 +9246,9 @@ function tickStatuses(f) {
   if (f.parry > 0) f.parry -= 1;
   if (f.dodge > 0) f.dodge -= 1;
   if (f.luckyCatProc > 0) f.luckyCatProc -= 1;
+  if (f.spaceSkeletonPirateProc > 0) f.spaceSkeletonPirateProc -= 1;
   if (f.patrickKillProc > 0) f.patrickKillProc -= 1;
+  if (f.angeloProc > 0) f.angeloProc -= 1;
   if (f.immunity > 0) f.immunity -= 1;
   if (f.counterStance > 0) f.counterStance -= 1;
   if (f.mark > 0) f.mark -= 1;
@@ -9614,8 +9871,11 @@ const STATUS_DEFS = [
   { key: "voidAnchor", name: "Void Anchor", icon: "🌀", desc: "Special void effect (limits recovery / movement depending on enemy)." },
   { key: "constellationCurse", name: "Constellation Curse", icon: "🌙", desc: "Temporary attack down and/or cooldown extension." },
   { key: "spacePatrolReady", name: "Space Patrol Ready", icon: "🛰️", desc: "Passive will trigger next turn: deals TRUE damage equal to half of current ATK (ATK ÷ 2), then gains +1 DEF and +1 HP." },
+  { key: "baltrioReady", name: "Baltrio Ready", icon: "🪞", desc: "Baltrio passive is charged. On its next turn end, it reflects ALL stored damage back to the enemy as TRUE damage (ignores armor)." },
   { key: "luckyCatProc", name: "Lucky Cat Proc", icon: "🍀", desc: "Lucky Cat passive just triggered: gained ATK from the enemy after attacking or using a skill." },
+  { key: "spaceSkeletonPirateProc", name: "Pirate Plunder", icon: "🏴‍☠️", desc: "Space Skeleton Pirate passive just triggered: stole enemy ATK after attacking or using a skill." },
   { key: "patrickKillProc", name: "Destroyer Proc", icon: "💀", desc: "Patrick the Destroyer passive triggered on kill: cooldown reset and gained +1 DEF and +1 HP." },
+  { key: "angeloProc", name: "Angelo Proc", icon: "✨", desc: "Angelo passive triggered: healed +1 HP, cleansed debuffs, and reduced skill cooldown by 1 after acting." },
 ];
 
 function getStatusCount(f, key) {
@@ -9702,8 +9962,18 @@ function renderStatusIcons(f, containerId) {
     const isSpacePatrolReady = (s.key === "spacePatrolReady" && f && f.id === "spacePatron");
     const isLuckyCatProc = (s.key === "luckyCatProc" && f && f.id === "luckyCat");
     const isPatrickKillProc = (s.key === "patrickKillProc" && f && f.id === "patrickDestroyer");
-    const displayCount = (isDaysiDodge || isSpacePatrolReady) ? "READY" : ((isLuckyCatProc || isPatrickKillProc) ? "PROC" : String(s.count));
-    const labelName = isDaysiDodge ? "Dodge Passive" : (isSpacePatrolReady ? "Space Patrol Passive" : (isLuckyCatProc ? "Lucky Cat Passive" : (isPatrickKillProc ? "Destroyer Passive" : s.name)));
+    const isAngeloProc = (s.key === "angeloProc" && f && f.id === "angelo");
+    const isBaltrioReady = (s.key === "baltrioReady" && f && f.id === "baltrio");
+    const displayCount =
+      (isDaysiDodge || isSpacePatrolReady || isBaltrioReady) ? "READY"
+      : ((isLuckyCatProc || isPatrickKillProc || isAngeloProc) ? "PROC" : String(s.count));
+    const labelName =
+      isDaysiDodge ? "Dodge Passive"
+      : (isSpacePatrolReady ? "Space Patrol Passive"
+      : (isBaltrioReady ? "Baltrio Passive"
+      : (isLuckyCatProc ? "Lucky Cat Passive"
+      : (isPatrickKillProc ? "Destroyer Passive"
+      : (isAngeloProc ? "Angelo Passive" : s.name)))));
     btn.innerHTML = `<span class="statusIconEmoji">${s.icon}</span><span class="statusIconCount">${displayCount}</span>`;
     const onShow = (ev) => {
       const x = (ev && (ev.clientX || (ev.touches && ev.touches[0] && ev.touches[0].clientX))) || 20;
@@ -10078,23 +10348,24 @@ function _updateUIImmediate() {
 
     const ready = playerTurn && !sil && !onCd && hpGateOk;
 
-    // Not clickable during cooldown/silence/hp-gate, clickable when ready
-    // ✅ Keep hover tooltip working even while on cooldown.
-    // Some browsers don't show tooltips on disabled buttons.
-    bs.disabled = !playerTurn || busy || !ready;
+    // ✅ Keep hover tooltip working even while on cooldown/silence.
+    // Some browsers don't show tooltips on disabled buttons, so only disable
+    // when it's not the player's turn or the battle is busy.
+    // The click handler already guards against cooldown/silence/hp-gate.
+    bs.disabled = !playerTurn || busy;
 
     // Text + hover tooltip
     if (!playerTurn) {
-      bs.textContent = "✨ Use Skill";
+      bs.textContent = "✨ Use Ability";
     } else if (!hpGateOk) {
       bs.textContent = "🩸 Needs ≤40% HP";
     } else if (sil) {
       bs.textContent = "🔇 Silenced";
     } else if (onCd) {
       const cdLabel = rtCd ? formatSkillCd(p) : `${cdTurns} turn(s)`;
-      bs.textContent = `⏳ Skill CD: ${cdLabel}`;
+      bs.textContent = `⏳ Ability CD: ${cdLabel}`;
     } else {
-      bs.textContent = "✨ Use Skill";
+      bs.textContent = "✨ Use Ability";
     }
 
     const cdTip = !playerTurn
@@ -10566,6 +10837,42 @@ if (state.turn === "player") tickStatuses(state.player);
         log(`🚓 ${cur.name}'s passive triggers! Deals ${dmg} TRUE damage to ${foe.name}. ${defNote}, ${hpNote}.`, state.turn === "player" ? "good" : "bad");
       }
     }
+
+  // ✅ Baltrio passive: every 3 turns, reflect ALL damage taken as TRUE damage (ignores armor).
+  // We store incoming damage inside applyDamage() as baltrioStored, then fire it here.
+  try {
+    const cur = state.turn === "player" ? state.player : state.enemy;
+    const foe = state.turn === "player" ? state.enemy : state.player;
+    if (cur && cur.id === "baltrio" && Number(cur.hp || 0) > 0 && foe && Number(foe.hp || 0) > 0) {
+      cur.baltrioTurns = Number(cur.baltrioTurns || 0) + 1;
+
+      // Show a clear "READY" icon on the status bar when the passive will trigger next time.
+      cur.baltrioReady = (cur.baltrioTurns % 3 === 2) ? 1 : 0;
+
+      if (cur.baltrioTurns % 3 === 0) {
+        cur.baltrioReady = 0; // consume the charge
+        const stored = Math.max(0, Math.floor(Number(cur.baltrioStored || 0) || 0));
+        cur.baltrioStored = 0;
+
+        if (stored > 0) {
+          applyDamage(foe, stored, { source: "passive", damageType: "true", attacker: cur, attackerName: cur.name, _baltrioReflect: true });
+        }
+
+        // Big, obvious feedback (no need to read logs)
+        try {
+          const side = (cur === state.player) ? "player" : "enemy";
+          const foeSide = (foe === state.player) ? "player" : "enemy";
+          pulsePassive(side);
+          floatingDamage(side, "🪞 REFLECT!", "passive", { dur: 1200, clearFirst: false });
+          if (stored > 0) floatingDamage(foeSide, `-${stored}✨`, "warn", { dur: 900, clearFirst: false });
+        } catch (e) {}
+
+        log(`🪞 ${cur.name}'s passive triggers! Reflects ${stored} stored damage as TRUE damage.`, state.turn === "player" ? "good" : "bad");
+        updateUI();
+      }
+    }
+  } catch (e) {}
+
   } catch (e) {}
 
   // ✅ Status effects (poison/debuff) can kill — resolve win/lose immediately
@@ -10714,6 +11021,12 @@ function enemyAI() {
         try { applyDaysiAfterActionPassive(e); } catch(e) {}
         // ✅ Lucky Cat passive triggers after each action (skill)
         try { applyLuckyCatAfterActionPassive(e, p); } catch(e) {}
+        // ✅ Space Skeleton Pirate passive triggers after each action (skill)
+        try { applySpaceSkeletonPirateAfterActionPassive(e, p); } catch(e) {}
+  // ✅ Space Skeleton Pirate passive triggers after each action (skill)
+  try { applySpaceSkeletonPirateAfterActionPassive(p, e); } catch(e) {}
+  // ✅ Angelo passive triggers after each action (skill)
+        try { applyAngeloAfterActionPassive(e); } catch(e) {}
 
         updateUI();
         // ✅ If the skill ended the fight, stop here. Otherwise continue to the normal attack.
@@ -10743,6 +11056,10 @@ applyDamage(p, dmg, { source: "attack", damageType: dmgType, attacker: e, attack
   try { applyDaysiAfterActionPassive(e); } catch(e) {}
   // ✅ Lucky Cat passive triggers after each action (attack)
   try { applyLuckyCatAfterActionPassive(e, p); } catch(e) {}
+  // ✅ Space Skeleton Pirate passive triggers after each action (attack)
+  try { applySpaceSkeletonPirateAfterActionPassive(e, p); } catch(e) {}
+  // ✅ Angelo passive triggers after each action (attack)
+  try { applyAngeloAfterActionPassive(e); } catch(e) {}
 
   if (!checkWin()) nextTurn();
   } catch (e) {
@@ -10828,6 +11145,10 @@ applyDamage(e, dmg, { source: "attack", damageType: dmgType, attacker: p, attack
     try { applyDaysiAfterActionPassive(p); } catch(e) {}
     // ✅ Lucky Cat passive triggers after each action (attack)
     try { applyLuckyCatAfterActionPassive(p, e); } catch(e) {}
+    // ✅ Space Skeleton Pirate passive triggers after each action (attack/skill)
+    try { applySpaceSkeletonPirateAfterActionPassive(p, e); } catch(e) {}
+    // ✅ Angelo passive triggers after each action (attack)
+    try { applyAngeloAfterActionPassive(p); } catch(e) {}
   };
 
   doOneAttack("");
@@ -10898,6 +11219,8 @@ function playerSkill() {
   try { applyDaysiAfterActionPassive(p); } catch(e) {}
   // ✅ Lucky Cat passive triggers after each action (skill)
   try { applyLuckyCatAfterActionPassive(p, e); } catch(e) {}
+  // ✅ Angelo passive triggers after each action (skill)
+  try { applyAngeloAfterActionPassive(p); } catch(e) {}
 
   updateUI();
   if (!checkWin()) nextTurn();
@@ -11263,8 +11586,14 @@ function renderGallery() {
     const enemyOnly = !!card.enemyOnly;
     const lockTag = enemyOnly ? " 🔒" : "";
 
+    const passiveLines = getGalleryPassiveLines(card);
+    const passiveText = passiveLines.length ? passiveLines.join("\n") : "None";
+
     div.innerHTML = `
-      <img src="${card.img}" alt="${card.name}" />
+      <div class="galleryImgWrap" role="button" aria-label="${escapeHtml(card.name)} info">
+        <img src="${card.img}" alt="${card.name}" />
+        <div class="passiveTooltip" role="tooltip"><b>Passive:</b> ${escapeHtml(passiveText)}</div>
+      </div>
       <div class="titleRow" style="margin-top:10px;">
         <strong>${card.name}${st.level>0 ? ` Lv${st.level}` : ""}${lockTag}</strong>
         <span class="rarityPill ${rarityCssClass(rarity)} rarityInline">${rarity}</span>
@@ -11280,6 +11609,17 @@ function renderGallery() {
         <b>Enemy passive:</b> Can trigger automatically each round if this card is the enemy.
       </div>
     `;
+
+    // 📱 Mobile: tap the card image to open a clean modal (ability + passive)
+    // Desktop: hover already shows passive tooltip; click does nothing.
+    const imgWrap = div.querySelector('.galleryImgWrap');
+    if (imgWrap && isTouchLike()) {
+      imgWrap.addEventListener('click', (e) => {
+        // Ignore taps on the lore info icon
+        if (e.target && e.target.closest && e.target.closest('.infoIcon')) return;
+        openGalleryCardModal(card, st);
+      });
+    }
 
     // ℹ️ Lore tooltip (hover the "i" icon)
     const titleRow = div.querySelector('.titleRow');
@@ -12608,7 +12948,7 @@ function closeAllLoreTooltips(e) {
     showView("home");
   }
 
-  // 🛈 Skill hover + mobile long-press tooltip for the Use Skill button
+  // 🛈 Ability hover + mobile long-press modal for the Use Ability button
   try { initSkillTooltipSystem(); } catch(e) {}
 
 }
@@ -12776,6 +13116,8 @@ const PATCH_NOTES = [
     "Round 30 final effect now only covers the Player Fighter Card and Enemy Fighter Card (not the whole screen).",
     "Nerf: after Cosmo Secret’s passive triggers, it now has a 2-turn cooldown.",
     "Newly obtained or recently used cards now display first in the Gallery and when choosing a card for battle."
+    ,"Gallery QoL: hover a card image to preview its Passive; on mobile, tap a card to open a clean Ability + Passive popup."
+    ,"Battle QoL: hover the Use Ability button to see Ability + Passive; on mobile, long-press Use Ability to open a stylish info popup with an OK button."
   ]
 },
 

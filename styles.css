@@ -314,6 +314,78 @@ button, .btn, .tabBtn, .miniTab, .infoBtn{ touch-action: manipulation; }
   cursor:help;
   user-select:none;
 }
+
+/* =========================
+   🧬 Passive tooltip (Gallery card image hover)
+   ========================= */
+.galleryImgWrap{ position:relative; display:block; }
+.galleryImgWrap img{ display:block; width:100%; border-radius: 14px; }
+.passiveTooltip{
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:10px;
+  padding:10px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.62);
+  color: rgba(245,248,255,.92);
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 14px 38px rgba(0,0,0,.45);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 180ms ease;
+  white-space: pre-line;
+}
+
+@media (hover:hover){
+  .galleryImgWrap:hover .passiveTooltip{ opacity: 1; transform: translateY(0); }
+}
+
+@media (hover:none){
+  .passiveTooltip{ display:none; }
+}
+
+/* =========================
+   ✨ Info Modals (Gallery tap + Skill long-press)
+   ========================= */
+.cardInfoModal{
+  width: min(720px, 100%);
+}
+.cardInfoHero{
+  display:flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.cardInfoImg{
+  width: 42%;
+  max-width: 260px;
+  border-radius: 18px;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow: 0 18px 44px rgba(0,0,0,.5);
+}
+.cardInfoMeta{ flex:1; }
+.cardInfoAbility{ margin-top: 6px; }
+.cardInfoAbilityTitle{ font-weight: 950; letter-spacing: .2px; margin-bottom: 6px; }
+.cardInfoAbilityText{ color: rgba(233,238,255,.86); }
+.cardInfoPassive{ margin-top: 10px; }
+.cardInfoPassiveTitle{ font-weight: 900; letter-spacing: .18px; opacity: .92; }
+.cardInfoPassiveText{
+  margin-top: 6px;
+  color: rgba(233,238,255,.70);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.cardInfoCd{ display:inline-flex; margin-top: 10px; }
+
+@media (max-width: 720px){
+  .cardInfoHero{ flex-direction: column; }
+  .cardInfoImg{ width: 100%; max-width: 100%; }
+}
 .loreTooltip{
   position:absolute;
   left:50%;
@@ -6630,6 +6702,21 @@ body.skillFlash .arenaCard::before{
 }
 
 
+
+
+/* ✨ Angelo passive proc: holy cleanse + heal pulse on the fighter image frame */
+.angeloProcFx{
+  animation: angeloProcPulse 700ms ease-out;
+  box-shadow: 0 0 1.05rem rgba(170, 255, 210, 0.35), 0 0 2.2rem rgba(140, 220, 255, 0.18);
+  outline: 2px solid rgba(170, 255, 210, 0.35);
+  outline-offset: 2px;
+}
+@keyframes angeloProcPulse{
+  0%{ transform: translateZ(0) scale(1); filter: brightness(1); }
+  35%{ transform: translateZ(0) scale(1.015); filter: brightness(1.18) saturate(1.1); }
+  100%{ transform: translateZ(0) scale(1); filter: brightness(1); }
+}
+
 /* 🍀 Lucky Cat passive proc: quick readable pulse on the fighter image frame */
 .luckyCatProcFx{
   animation: luckyCatProcPulse 650ms ease-out;
@@ -6641,6 +6728,31 @@ body.skillFlash .arenaCard::before{
   0%   { transform: scale(1.00); filter: saturate(1.0) brightness(1.0); }
   35%  { transform: scale(1.02); filter: saturate(1.15) brightness(1.08); }
   100% { transform: scale(1.00); filter: saturate(1.0) brightness(1.0); }
+}
+
+/* 🏴‍☠️ Space Skeleton Pirate passive proc: quick steal pulse on both frames */
+.skeletonPirateProcFx{
+  animation: skeletonPirateProcPulse 700ms ease-out;
+  outline: 2px solid rgba(180, 255, 255, 0.35);
+  box-shadow: 0 0 0.9rem rgba(120, 255, 255, 0.22), 0 0 1.8rem rgba(120, 255, 255, 0.14);
+}
+
+.skeletonPirateVictimFx{
+  animation: skeletonPirateVictimPulse 700ms ease-out;
+  outline: 2px solid rgba(255, 120, 120, 0.28);
+  box-shadow: 0 0 0.9rem rgba(255, 120, 120, 0.18), 0 0 1.8rem rgba(255, 120, 120, 0.10);
+}
+
+@keyframes skeletonPirateProcPulse{
+  0%{ filter: brightness(1); transform: translateZ(0) scale(1); }
+  35%{ filter: brightness(1.15); transform: translateZ(0) scale(1.01); }
+  100%{ filter: brightness(1); transform: translateZ(0) scale(1); }
+}
+
+@keyframes skeletonPirateVictimPulse{
+  0%{ filter: brightness(1); transform: translateZ(0) scale(1); }
+  35%{ filter: brightness(0.92); transform: translateZ(0) scale(0.995); }
+  100%{ filter: brightness(1); transform: translateZ(0) scale(1); }
 }
 
 .patrickKillProcFx{
