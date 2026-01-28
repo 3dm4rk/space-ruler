@@ -13124,7 +13124,7 @@ const PATCH_NOTES = [
     "Roque bug fixed: it will no longer change/mimic the enemy’s current HP.",
     "Card panel UI updated for easier checking.",
     "Round 30 final effect now only covers the Player Fighter Card and Enemy Fighter Card (not the whole screen).",
-    "Nerf: after Cosmo Secret’s passive triggers, it now has a 2-turn cooldown.",
+    "Nerf: after Cosmo Secret’s passive triggers, it now has a 6-turn cooldown.",
     "Newly obtained or recently used cards now display first in the Gallery and when choosing a card for battle."
     ,"Gallery QoL: hover a card image to preview its Passive; on mobile, tap a card to open a clean Ability + Passive popup."
     ,"Battle QoL: hover the Use Ability button to see Ability + Passive; on mobile, long-press Use Ability to open a stylish info popup with an OK button."
